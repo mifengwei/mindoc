@@ -10,12 +10,9 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"io/ioutil"
 	"os"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/beego/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
@@ -23,6 +20,7 @@ import (
 	"github.com/mindoc-org/mindoc/utils/filetil"
 	"github.com/mindoc-org/mindoc/utils/pagination"
 	"github.com/russross/blackfriday/v2"
+	"gorm.io/gorm"
 )
 
 type ManagerController struct {
@@ -160,7 +158,7 @@ func (c *ManagerController) UpdateMemberStatus() {
 	member.Status = status
 
 	if err := member.Update(); err != nil {
-		logs.Error("", err)
+		logger.Error("", err)
 		c.JsonResult(6003, i18n.Tr(c.Lang, "message.failed"))
 	}
 	c.JsonResult(0, "ok", member)
@@ -212,7 +210,7 @@ func (c *ManagerController) EditMember() {
 
 	member, err := models.NewMember().Find(member_id)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.Abort("404")
 	}
 	if c.Ctx.Input.IsPost() {
@@ -237,7 +235,7 @@ func (c *ManagerController) EditMember() {
 		if password1 != "" {
 			password, err := utils.PasswordHash(password1)
 			if err != nil {
-				logs.Error(err)
+				logger.Error(err)
 				c.JsonResult(6003, i18n.Tr(c.Lang, "message.pwd_encrypt_failed"))
 			}
 			member.Password = password
@@ -262,7 +260,7 @@ func (c *ManagerController) DeleteMember() {
 
 	member, err := models.NewMember().Find(member_id)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(500, i18n.Tr(c.Lang, "message.user_not_existed"))
 	}
 	if member.Role == conf.MemberSuperRole {
@@ -271,13 +269,13 @@ func (c *ManagerController) DeleteMember() {
 
 	superMember, err := models.NewMember().FindByFieldFirst("role", 0)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(5001, "未能找到超级管理员")
 	}
 
 	err = models.NewMember().Delete(member_id, superMember.MemberId)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(5002, i18n.Tr(c.Lang, "message.failed"))
 	}
 	c.JsonResult(0, "ok")
@@ -416,11 +414,11 @@ func (c *ManagerController) DeleteBook() {
 
 	err := book.ThoroughDeleteBook(bookId)
 
-	if err == orm.ErrNoRows {
+	if err == gorm.ErrRecordNotFound {
 		c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist"))
 	}
 	if err != nil {
-		logs.Error("删除失败 -> ", err)
+		logger.Error("删除失败 -> ", err)
 		c.JsonResult(6003, i18n.Tr(c.Lang, "message.failed"))
 	}
 	c.JsonResult(0, "ok")
@@ -446,14 +444,14 @@ func (c *ManagerController) CreateToken() {
 
 		book.PrivateToken = string(utils.Krand(conf.GetTokenSize(), utils.KC_RAND_KIND_ALL))
 		if err := book.Update(); err != nil {
-			logs.Error("生成阅读令牌失败 => ", err)
+			logger.Error("生成阅读令牌失败 => ", err)
 			c.JsonResult(6003, i18n.Tr(c.Lang, "message.failed"))
 		}
 		c.JsonResult(0, "ok", conf.URLFor("DocumentController.Index", ":key", book.Identify, "token", book.PrivateToken))
 	} else {
 		book.PrivateToken = ""
 		if err := book.Update(); err != nil {
-			logs.Error("CreateToken => ", err)
+			logger.Error("CreateToken => ", err)
 			c.JsonResult(6004, i18n.Tr(c.Lang, "message.failed"))
 		}
 		c.JsonResult(0, "ok", "")
@@ -484,15 +482,15 @@ func (c *ManagerController) Setting() {
 		c.Data[item.OptionName] = item.OptionValue
 	}
 
-	i18nMapStrs, err := web.AppConfig.String("i18n_map")
+	i18nMapStrs, err := conf.GetString("i18n_map")
 	if err != nil {
-		logs.Error("web.AppConfig `i18n_map` not found")
+		logger.Error("conf.GetString `i18n_map` not found")
 		i18nMapStrs = "{}"
 	}
 	var i18nMap map[string]string
 	err = json.Unmarshal([]byte(i18nMapStrs), &i18nMap)
 	if err != nil {
-		logs.Error("json `i18nList` Unmarshal fail")
+		logger.Error("json `i18nList` Unmarshal fail")
 		i18nMap = make(map[string]string)
 	}
 	c.Data["i18n_map"] = i18nMap
@@ -509,7 +507,7 @@ func (c *ManagerController) Transfer() {
 	member, err := models.NewMember().FindByAccount(account)
 
 	if err != nil {
-		logs.Error("FindByAccount => ", err)
+		logger.Error("FindByAccount => ", err)
 		c.JsonResult(6005, i18n.Tr(c.Lang, "message.receive_account_not_exist"))
 	}
 	if member.Status != 0 {
@@ -529,7 +527,7 @@ func (c *ManagerController) Transfer() {
 	rel, err := models.NewRelationship().FindFounder(book.BookId)
 
 	if err != nil {
-		logs.Error("FindFounder => ", err)
+		logger.Error("FindFounder => ", err)
 		c.JsonResult(6009, "查询项目创始人失败")
 	}
 	if member.MemberId == rel.MemberId {
@@ -539,7 +537,7 @@ func (c *ManagerController) Transfer() {
 	err = models.NewRelationship().Transfer(book.BookId, rel.MemberId, member.MemberId)
 
 	if err != nil {
-		logs.Error("Transfer => ", err)
+		logger.Error("Transfer => ", err)
 		c.JsonResult(6008, err.Error())
 	}
 	c.JsonResult(0, "ok")
@@ -605,12 +603,12 @@ func (c *ManagerController) PrivatelyOwned() {
 
 	book.PrivatelyOwned = state
 
-	logs.Info("", state, status)
+	logger.Info("", state, status)
 
 	err = book.Update()
 
 	if err != nil {
-		logs.Error("PrivatelyOwned => ", err)
+		logger.Error("PrivatelyOwned => ", err)
 		c.JsonResult(6004, i18n.Tr(c.Lang, "message.failed"))
 	}
 	c.JsonResult(0, "ok")
@@ -668,10 +666,10 @@ func (c *ManagerController) AttachClean() {
 			if err != nil {
 				c.Abort("500")
 			} else if len(searchList) == 0 {
-				logs.Info("delete file:", item.FilePath)
+				logger.Info("delete file:", item.FilePath)
 				item.FilePath = p
 				if err := item.Delete(); err != nil {
-					logs.Error("AttachDelete => ", err)
+					logger.Error("AttachDelete => ", err)
 					c.JsonResult(6002, err.Error())
 					break
 				}
@@ -695,8 +693,8 @@ func (c *ManagerController) AttachDetailed() {
 
 	attach, err := models.NewAttachmentResult().Find(attach_id)
 	if err != nil {
-		logs.Error("AttachDetailed => ", err)
-		if err == orm.ErrNoRows {
+		logger.Error("AttachDetailed => ", err)
+		if err == gorm.ErrRecordNotFound {
 			c.Abort("404")
 		} else {
 			c.Abort("500")
@@ -722,13 +720,13 @@ func (c *ManagerController) AttachDelete() {
 	attach, err := models.NewAttachment().Find(attachId)
 
 	if err != nil {
-		logs.Error("AttachDelete => ", err)
+		logger.Error("AttachDelete => ", err)
 		c.JsonResult(6001, err.Error())
 	}
 	attach.FilePath = filepath.Join(conf.WorkingDirectory, attach.FilePath)
 
 	if err := attach.Delete(); err != nil {
-		logs.Error("AttachDelete => ", err)
+		logger.Error("AttachDelete => ", err)
 		c.JsonResult(6002, err.Error())
 	}
 	c.JsonResult(0, "ok")
@@ -760,7 +758,7 @@ func (c *ManagerController) LabelList() {
 func (c *ManagerController) LabelDelete() {
 	labelId, err := strconv.Atoi(c.Ctx.Input.Param(":id"))
 	if err != nil {
-		logs.Error("获取删除标签参数时出错:", err)
+		logger.Error("获取删除标签参数时出错:", err)
 		c.JsonResult(50001, i18n.Tr(c.Lang, "message.param_error"))
 	}
 	if labelId <= 0 {
@@ -769,7 +767,7 @@ func (c *ManagerController) LabelDelete() {
 
 	label, err := models.NewLabel().FindFirst("label_id", labelId)
 	if err != nil {
-		logs.Error("查询标签时出错:", err)
+		logger.Error("查询标签时出错:", err)
 		c.JsonResult(50001, "查询标签时出错:"+err.Error())
 	}
 	if err := label.Delete(); err != nil {
@@ -788,31 +786,31 @@ func (c *ManagerController) Config() {
 		if content == "" {
 			c.JsonResult(500, "配置文件不能为空")
 		}
-		tf, err := ioutil.TempFile(os.TempDir(), "mindoc")
+		tf, err := os.CreateTemp(os.TempDir(), "mindoc")
 
 		if err != nil {
-			logs.Error("创建临时文件失败 ->", err)
+			logger.Error("创建临时文件失败 ->", err)
 			c.JsonResult(5001, "创建临时文件失败")
 		}
 		defer tf.Close()
 
 		tf.WriteString(content)
 
-		err = web.LoadAppConfig("ini", tf.Name())
+		err = conf.ReloadConfig()
 
 		if err != nil {
-			logs.Error("加载配置文件失败 ->", err)
+			logger.Error("加载配置文件失败 ->", err)
 			c.JsonResult(5002, "加载配置文件失败")
 		}
 		err = filetil.CopyFile(tf.Name(), conf.ConfigurationFile)
 		if err != nil {
-			logs.Error("保存配置文件失败 ->", err)
+			logger.Error("保存配置文件失败 ->", err)
 			c.JsonResult(5003, "保存配置文件失败")
 		}
 		c.JsonResult(0, "保存成功")
 	}
 	c.Data["ConfigContent"] = ""
-	if b, err := ioutil.ReadFile(conf.ConfigurationFile); err == nil {
+	if b, err := os.ReadFile(conf.ConfigurationFile); err == nil {
 		c.Data["ConfigContent"] = string(b)
 	}
 }
@@ -824,10 +822,10 @@ func (c *ManagerController) Team() {
 	pageIndex, _ := c.GetInt("page", 0)
 
 	teams, totalCount, err := models.NewTeam().FindToPager(pageIndex, conf.PageSize)
-	if err != nil && err != orm.ErrNoRows {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.ShowErrorPage(500, err.Error())
 	}
-	if err == orm.ErrNoRows || len(teams) <= 0 {
+	if err == gorm.ErrRecordNotFound || len(teams) <= 0 {
 		c.Data["Result"] = template.JS("[]")
 		c.Data["PageHtml"] = ""
 		return
@@ -917,17 +915,17 @@ func (c *ManagerController) TeamMemberList() {
 	pageIndex, _ := c.GetInt("page", 0)
 
 	team, err := models.NewTeam().First(teamId)
-	if err == orm.ErrNoRows {
+	if err == gorm.ErrRecordNotFound {
 		c.ShowErrorPage(404, "团队不存在")
 	}
 	c.CheckErrorResult(500, err)
 	c.Data["Model"] = team
 
 	teams, totalCount, err := models.NewTeamMember().SetLang(c.Lang).FindToPager(teamId, pageIndex, conf.PageSize)
-	if err != nil && err != orm.ErrNoRows {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.ShowErrorPage(500, err.Error())
 	}
-	if err == orm.ErrNoRows || len(teams) <= 0 {
+	if err == gorm.ErrRecordNotFound || len(teams) <= 0 {
 		c.Data["Result"] = template.JS("[]")
 		c.Data["PageHtml"] = ""
 		return
@@ -942,7 +940,7 @@ func (c *ManagerController) TeamMemberList() {
 
 	b, err := json.Marshal(teams)
 	if err != nil {
-		logs.Error("编码 JSON 结果失败 ->", err)
+		logger.Error("编码 JSON 结果失败 ->", err)
 		c.Data["Result"] = template.JS("[]")
 	} else {
 		c.Data["Result"] = template.JS(string(b))
@@ -1041,7 +1039,7 @@ func (c *ManagerController) TeamBookList() {
 
 	team, err := models.NewTeam().First(teamId)
 
-	if err == orm.ErrNoRows {
+	if err == gorm.ErrRecordNotFound {
 		c.ShowErrorPage(404, "团队不存在")
 	}
 	c.CheckErrorResult(500, err)
@@ -1049,10 +1047,10 @@ func (c *ManagerController) TeamBookList() {
 
 	teams, totalCount, err := models.NewTeamRelationship().FindToPager(teamId, pageIndex, conf.PageSize)
 
-	if err != nil && err != orm.ErrNoRows {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.ShowErrorPage(500, err.Error())
 	}
-	if err == orm.ErrNoRows || len(teams) <= 0 {
+	if err == gorm.ErrRecordNotFound || len(teams) <= 0 {
 		c.Data["Result"] = template.JS("[]")
 		c.Data["PageHtml"] = ""
 		return
@@ -1067,7 +1065,7 @@ func (c *ManagerController) TeamBookList() {
 
 	b, err := json.Marshal(teams)
 	if err != nil {
-		logs.Error("编码 JSON 结果失败 ->", err)
+		logger.Error("编码 JSON 结果失败 ->", err)
 		c.Data["Result"] = template.JS("[]")
 	} else {
 		c.Data["Result"] = template.JS(string(b))
@@ -1144,10 +1142,10 @@ func (c *ManagerController) Itemsets() {
 
 	items, totalCount, err := models.NewItemsets().FindToPager(pageIndex, conf.PageSize)
 
-	if err != nil && err != orm.ErrNoRows {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.ShowErrorPage(500, err.Error())
 	}
-	if err == orm.ErrNoRows || len(items) <= 0 {
+	if err == gorm.ErrRecordNotFound || len(items) <= 0 {
 		c.Data["Lists"] = items
 		c.Data["PageHtml"] = ""
 		return
@@ -1176,7 +1174,7 @@ func (c *ManagerController) ItemsetsEdit() {
 	var err error
 	if itemId > 0 {
 		if item, err = models.NewItemsets().First(itemId); err != nil {
-			if err == orm.ErrNoRows {
+			if err == gorm.ErrRecordNotFound {
 				c.JsonResult(5002, i18n.Tr(c.Lang, "message.project_space_not_exist"))
 			} else {
 				c.JsonResult(5003, "查询项目空间出错")

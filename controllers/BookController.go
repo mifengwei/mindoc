@@ -18,8 +18,8 @@ import (
 
 	"net/http"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
+	"gorm.io/gorm"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/graphics"
 	"github.com/mindoc-org/mindoc/models"
@@ -41,7 +41,7 @@ func (c *BookController) Index() {
 	books, totalCount, err := models.NewBook().FindToPager(pageIndex, conf.PageSize, c.Member.MemberId, c.Lang)
 
 	if err != nil {
-		logs.Error("BookController.Index => ", err)
+		logger.Error("BookController.Index => ", err)
 		c.Abort("500")
 	}
 
@@ -106,7 +106,7 @@ func (c *BookController) Setting() {
 
 	book, err := models.NewBookResult().FindByIdentify(key, c.Member.MemberId)
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.Abort("404")
 		}
 		if err == models.ErrPermissionDenied {
@@ -137,7 +137,7 @@ func (c *BookController) SaveBook() {
 	book, err := models.NewBook().Find(bookResult.BookId)
 
 	if err != nil {
-		logs.Error("SaveBook => ", err)
+		logger.Error("SaveBook => ", err)
 		c.JsonResult(6002, err.Error())
 	}
 
@@ -225,7 +225,7 @@ func (c *BookController) SaveBook() {
 	bookResult.Description = description
 	bookResult.CommentStatus = commentStatus
 
-	logs.Info("用户 [", c.Member.Account, "] 修改了项目 ->", book)
+	logger.Info("用户 [", c.Member.Account, "] 修改了项目 ->", book)
 
 	c.JsonResult(0, "ok", bookResult)
 }
@@ -267,10 +267,10 @@ func (c *BookController) PrivatelyOwned() {
 	err = book.Update()
 
 	if err != nil {
-		logs.Error("PrivatelyOwned => ", err)
+		logger.Error("PrivatelyOwned => ", err)
 		c.JsonResult(6004, i18n.Tr(c.Lang, "message.failed"))
 	}
-	logs.Info("用户 【", c.Member.Account, "]修改了项目权限 ->", state)
+	logger.Info("用户 【", c.Member.Account, "]修改了项目权限 ->", state)
 	c.JsonResult(0, "ok")
 }
 
@@ -285,7 +285,7 @@ func (c *BookController) Transfer() {
 	member, err := models.NewMember().FindByAccount(account)
 
 	if err != nil {
-		logs.Error("FindByAccount => ", err)
+		logger.Error("FindByAccount => ", err)
 		c.JsonResult(6005, i18n.Tr(c.Lang, "message.receive_account_not_exist"))
 	}
 	if member.Status != 0 {
@@ -304,7 +304,7 @@ func (c *BookController) Transfer() {
 	err = models.NewRelationship().Transfer(bookResult.BookId, c.Member.MemberId, member.MemberId)
 
 	if err != nil {
-		logs.Error("转让项目失败 -> ", err)
+		logger.Error("转让项目失败 -> ", err)
 		c.JsonResult(6008, err.Error())
 	}
 	c.JsonResult(0, "ok")
@@ -322,14 +322,14 @@ func (c *BookController) UploadCover() {
 	book, err := models.NewBook().Find(bookResult.BookId)
 
 	if err != nil {
-		logs.Error("SaveBook => ", err)
+		logger.Error("SaveBook => ", err)
 		c.JsonResult(6002, err.Error())
 	}
 
 	file, moreFile, err := c.GetFile("image-file")
 
 	if err != nil {
-		logs.Error("获取上传文件失败 ->", err.Error())
+		logger.Error("获取上传文件失败 ->", err.Error())
 		c.JsonResult(500, "读取文件异常")
 		return
 	}
@@ -364,7 +364,7 @@ func (c *BookController) UploadCover() {
 	err = c.SaveToFile("image-file", filePath)
 
 	if err != nil {
-		logs.Error("", err)
+		logger.Error("", err)
 		c.JsonResult(500, "图片保存失败")
 	}
 	defer func(filePath string) {
@@ -375,7 +375,7 @@ func (c *BookController) UploadCover() {
 	subImg, err := graphics.ImageCopyFromFile(filePath, x, y, width, height)
 
 	if err != nil {
-		logs.Error("graphics.ImageCopyFromFile => ", err)
+		logger.Error("graphics.ImageCopyFromFile => ", err)
 		c.JsonResult(500, "图片剪切")
 	}
 
@@ -385,7 +385,7 @@ func (c *BookController) UploadCover() {
 	err = graphics.ImageResizeSaveFile(subImg, 350, 460, filePath)
 
 	if err != nil {
-		logs.Error("ImageResizeSaveFile => ", err.Error())
+		logger.Error("ImageResizeSaveFile => ", err.Error())
 		c.JsonResult(500, "保存图片失败")
 	}
 
@@ -406,7 +406,7 @@ func (c *BookController) UploadCover() {
 	if oldCover != conf.GetDefaultCover() {
 		os.Remove("." + oldCover)
 	}
-	logs.Info("用户[", c.Member.Account, "]上传了项目封面 ->", book.BookName, book.BookId, book.Cover)
+	logger.Info("用户[", c.Member.Account, "]上传了项目封面 ->", book.BookName, book.BookId, book.Cover)
 
 	c.JsonResult(0, "ok", url)
 }
@@ -547,16 +547,16 @@ func (c *BookController) Create() {
 		book.Theme = "default"
 
 		if err := book.Insert(c.Lang); err != nil {
-			logs.Error("Insert => ", err)
+			logger.Error("Insert => ", err)
 			c.JsonResult(6005, i18n.Tr(c.Lang, "message.failed"))
 		}
 		bookResult, err := models.NewBookResult().FindByIdentify(book.Identify, c.Member.MemberId)
 
 		if err != nil {
-			logs.Error(err)
+			logger.Error(err)
 		}
 
-		logs.Info("用户[", c.Member.Account, "]创建了项目 ->", book)
+		logger.Info("用户[", c.Member.Account, "]创建了项目 ->", book)
 		c.JsonResult(0, "ok", bookResult)
 	}
 	c.JsonResult(6001, "error")
@@ -583,7 +583,7 @@ func (c *BookController) Copy() {
 		} else {
 			bookResult, err := models.NewBookResult().FindByIdentify(book.Identify, c.Member.MemberId)
 			if err != nil {
-				logs.Error("查询失败")
+				logger.Error("查询失败")
 			}
 			c.JsonResult(0, "ok", bookResult)
 		}
@@ -672,7 +672,7 @@ func (c *BookController) Import() {
 		go book.ImportWordBook(tempPath, c.Lang)
 	}
 
-	logs.Info("用户[", c.Member.Account, "]导入了项目 ->", book)
+	logger.Info("用户[", c.Member.Account, "]导入了项目 ->", book)
 
 	c.JsonResult(0, "项目正在后台转换中，请稍后查看")
 }
@@ -688,10 +688,10 @@ func (c *BookController) Import() {
 //		if err == models.ErrPermissionDenied {
 //			c.JsonResult(403, i18n.Tr(c.Lang, "message.no_permission"))
 //		}
-//		if err == orm.ErrNoRows {
+//		if err == gorm.ErrRecordNotFound {
 //			c.JsonResult(404, i18n.Tr(c.Lang, "message.item_not_exist"))
 //		}
-//		logs.Error("生成阅读令牌失败 =>", err)
+//		logger.Error("生成阅读令牌失败 =>", err)
 //		c.JsonResult(6002, err.Error())
 //	}
 //	book := models.NewBook()
@@ -706,18 +706,18 @@ func (c *BookController) Import() {
 //
 //		book.PrivateToken = string(utils.Krand(conf.GetTokenSize(), utils.KC_RAND_KIND_ALL))
 //		if err := book.Update(); err != nil {
-//			logs.Error("生成阅读令牌失败 => ", err)
+//			logger.Error("生成阅读令牌失败 => ", err)
 //			c.JsonResult(6003, "生成阅读令牌失败")
 //		}
-//		logs.Info("用户[", c.Member.Account, "]创建项目令牌 ->", book.PrivateToken)
+//		logger.Info("用户[", c.Member.Account, "]创建项目令牌 ->", book.PrivateToken)
 //		c.JsonResult(0, "ok", conf.URLFor("DocumentController.Index", ":key", book.Identify, "token", book.PrivateToken))
 //	} else {
 //		book.PrivateToken = ""
 //		if err := book.Update(); err != nil {
-//			logs.Error("CreateToken => ", err)
+//			logger.Error("CreateToken => ", err)
 //			c.JsonResult(6004, "删除令牌失败")
 //		}
-//		logs.Info("用户[", c.Member.Account, "]创建项目令牌 ->", book.PrivateToken)
+//		logger.Info("用户[", c.Member.Account, "]创建项目令牌 ->", book.PrivateToken)
 //		c.JsonResult(0, "ok", "")
 //	}
 //}
@@ -738,14 +738,14 @@ func (c *BookController) Delete() {
 	}
 	err = models.NewBook().ThoroughDeleteBook(bookResult.BookId)
 
-	if err == orm.ErrNoRows {
+	if err == gorm.ErrRecordNotFound {
 		c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist"))
 	}
 	if err != nil {
-		logs.Error("删除项目 => ", err)
+		logger.Error("删除项目 => ", err)
 		c.JsonResult(6003, "删除失败")
 	}
-	logs.Info("用户[", c.Member.Account, "]删除了项目 ->", bookResult)
+	logger.Info("用户[", c.Member.Account, "]删除了项目 ->", bookResult)
 	c.JsonResult(0, "ok")
 }
 
@@ -760,7 +760,7 @@ func (c *BookController) Release() {
 	if c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
-			logs.Error("发布文档失败 ->", err)
+			logger.Error("发布文档失败 ->", err)
 			c.JsonResult(6003, "文档不存在")
 			return
 		}
@@ -772,10 +772,10 @@ func (c *BookController) Release() {
 			if err == models.ErrPermissionDenied {
 				c.JsonResult(6001, i18n.Tr(c.Lang, "message.no_permission"))
 			}
-			if err == orm.ErrNoRows {
+			if err == gorm.ErrRecordNotFound {
 				c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist"))
 			}
-			logs.Error(err)
+			logger.Error(err)
 			c.JsonResult(6003, i18n.Tr(c.Lang, "message.unknown_exception"))
 		}
 		if book.RoleId != conf.BookAdmin && book.RoleId != conf.BookFounder && book.RoleId != conf.BookEditor {
@@ -841,7 +841,7 @@ func (c *BookController) SaveSort() {
 	} else {
 		bookResult, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 		if err != nil {
-			logs.Error("DocumentController.Edit => ", err)
+			logger.Error("DocumentController.Edit => ", err)
 
 			c.Abort("403")
 		}
@@ -858,7 +858,7 @@ func (c *BookController) SaveSort() {
 	err := json.Unmarshal(content, &docs)
 
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6003, "数据错误")
 	}
 
@@ -866,21 +866,21 @@ func (c *BookController) SaveSort() {
 		if docId, ok := item["id"].(float64); ok {
 			doc, err := models.NewDocument().Find(int(docId))
 			if err != nil {
-				logs.Error(err)
+				logger.Error(err)
 				continue
 			}
 			if doc.BookId != bookId {
-				logs.Info("%s", i18n.Tr(c.Lang, "message.no_permission"))
+				logger.Info("%s", i18n.Tr(c.Lang, "message.no_permission"))
 				continue
 			}
 			sort, ok := item["sort"].(float64)
 			if !ok {
-				logs.Info("排序数字转换失败 => ", item)
+				logger.Info("排序数字转换失败 => ", item)
 				continue
 			}
 			parentId, ok := item["parent"].(float64)
 			if !ok {
-				logs.Info("父分类转换失败 => ", item)
+				logger.Info("父分类转换失败 => ", item)
 				continue
 			}
 			if parentId > 0 {
@@ -892,7 +892,7 @@ func (c *BookController) SaveSort() {
 			doc.ParentId = int(parentId)
 			if err := doc.InsertOrUpdate(); err != nil {
 				fmt.Printf("%s", err.Error())
-				logs.Error(err)
+				logger.Error(err)
 			}
 		} else {
 			fmt.Printf("文档ID转换失败 => %+v", item)
@@ -961,7 +961,7 @@ func (c *BookController) TeamAdd() {
 	}
 	_, err = models.NewTeam().First(teamId, "team_id")
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.JsonResult(500, "团队不存在")
 		}
 		c.JsonResult(5002, err.Error())
@@ -1005,7 +1005,7 @@ func (c *BookController) TeamDelete() {
 	err = models.NewTeamRelationship().DeleteByBookId(book.BookId, teamId)
 
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.JsonResult(5003, "团队未加入项目")
 		}
 		c.JsonResult(5004, err.Error())
@@ -1063,7 +1063,7 @@ func (c *BookController) IsPermission() (*models.BookResult, error) {
 		if err == models.ErrPermissionDenied {
 			return book, errors.New(i18n.Tr(c.Lang, "message.no_permission"))
 		}
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			return book, errors.New(i18n.Tr(c.Lang, "message.item_not_exist"))
 		}
 		return book, err

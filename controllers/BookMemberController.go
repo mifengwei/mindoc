@@ -3,8 +3,8 @@ package controllers
 import (
 	"errors"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
+	"gorm.io/gorm"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/beego/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
@@ -19,7 +19,7 @@ func (c *BookMemberController) AddMember() {
 	identify := c.GetString("identify")
 	account, _ := c.GetInt("account")
 	roleId, _ := c.GetInt("role_id", 3)
-	logs.Info(account)
+	logger.Info(account)
 	if identify == "" || account <= 0 {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
 	}
@@ -81,7 +81,7 @@ func (c *BookMemberController) ChangeRole() {
 		if err == models.ErrPermissionDenied {
 			c.JsonResult(403, i18n.Tr(c.Lang, "message.no_permission"))
 		}
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.JsonResult(404, i18n.Tr(c.Lang, "message.item_not_exist"))
 		}
 		c.JsonResult(6002, err.Error())
@@ -106,7 +106,7 @@ func (c *BookMemberController) ChangeRole() {
 	relationship, err := models.NewRelationship().UpdateRoleId(book.BookId, memberId, conf.BookRole(role))
 
 	if err != nil {
-		logs.Error("变更用户在项目中的权限 => ", err)
+		logger.Error("变更用户在项目中的权限 => ", err)
 		c.JsonResult(6005, err.Error())
 	}
 
@@ -136,7 +136,7 @@ func (c *BookMemberController) RemoveMember() {
 		if err == models.ErrPermissionDenied {
 			c.JsonResult(403, i18n.Tr(c.Lang, "message.no_permission"))
 		}
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.JsonResult(404, i18n.Tr(c.Lang, "message.item_not_exist"))
 		}
 		c.JsonResult(6002, err.Error())
@@ -161,7 +161,7 @@ func (c *BookMemberController) IsPermission() (*models.BookResult, error) {
 		if err == models.ErrPermissionDenied {
 			return book, errors.New(i18n.Tr(c.Lang, "message.no_permission"))
 		}
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			return book, errors.New(i18n.Tr(c.Lang, "message.item_not_exist"))
 		}
 		return book, err

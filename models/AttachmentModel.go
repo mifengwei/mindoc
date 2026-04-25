@@ -8,45 +8,35 @@ import (
 
 	"strings"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
+	"gorm.io/gorm"
 	"github.com/mindoc-org/mindoc/conf"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/utils/filetil"
-	// "gorm.io/driver/sqlite"
-	// "gorm.io/gorm"
-	// "gorm.io/gorm/logger"
-	// "gorm.io/gorm/schema"
 )
-
-// 定义全局的db对象，我们执行数据库操作主要通过他实现。
-// var _db *gorm.DB
 
 // Attachment struct .
 type Attachment struct {
-	AttachmentId int       `orm:"column(attachment_id);pk;auto;unique" json:"attachment_id"`
-	BookId       int       `orm:"column(book_id);type(int);description(所属book id)" json:"book_id"`
-	DocumentId   int       `orm:"column(document_id);type(int);null;description(所属文档id)" json:"doc_id"`
-	FileName     string    `orm:"column(file_name);size(255);description(文件名称)" json:"file_name"`
-	FilePath     string    `orm:"column(file_path);size(2000);description(文件路径)" json:"file_path"`
-	FileSize     float64   `orm:"column(file_size);type(float);description(文件大小 字节)" json:"file_size"`
-	HttpPath     string    `orm:"column(http_path);size(2000);description(文件路径)" json:"http_path"`
-	FileExt      string    `orm:"column(file_ext);size(50);description(文件后缀)" json:"file_ext"`
-	CreateTime   time.Time `orm:"type(datetime);column(create_time);auto_now_add;description(创建时间)" json:"create_time"`
-	CreateAt     int       `orm:"column(create_at);type(int);description(创建人id)" json:"create_at"`
-	ResourceType string    `orm:"-" json:"resource_type"`
+	AttachmentId int       `gorm:"primaryKey;autoIncrement;column:attachment_id" json:"attachment_id"`
+	BookId       int       `gorm:"column:book_id;type:int" json:"book_id"`
+	DocumentId   int       `gorm:"column:document_id;type:int" json:"doc_id"`
+	FileName     string    `gorm:"column:file_name;size:255" json:"file_name"`
+	FilePath     string    `gorm:"column:file_path;size:2000" json:"file_path"`
+	FileSize     float64   `gorm:"column:file_size;type:float" json:"file_size"`
+	HttpPath     string    `gorm:"column:http_path;size:2000" json:"http_path"`
+	FileExt      string    `gorm:"column:file_ext;size:50" json:"file_ext"`
+	CreateTime   time.Time `gorm:"type:datetime;column:create_time;autoCreateTime" json:"create_time"`
+	CreateAt     int       `gorm:"column:create_at;type:int" json:"create_at"`
+	ResourceType string    `gorm:"-" json:"resource_type"`
 }
 
 // TableName 获取对应上传附件数据库表名.
 func (m *Attachment) TableName() string {
-	return "attachment"
+	return conf.GetDatabasePrefix() + "attachment"
 }
 
-// TableEngine 获取数据使用的引擎.
-func (m *Attachment) TableEngine() string {
-	return "INNODB"
-}
+// TableNameWithPrefix 获取带前缀的表名.
 func (m *Attachment) TableNameWithPrefix() string {
-	return conf.GetDatabasePrefix() + m.TableName()
+	return m.TableName()
 }
 
 func NewAttachment() *Attachment {
@@ -54,26 +44,19 @@ func NewAttachment() *Attachment {
 }
 
 func (m *Attachment) Insert() error {
-	o := orm.NewOrm()
-
-	_, err := o.Insert(m)
-
-	return err
+	return DB.Create(m).Error
 }
+
 func (m *Attachment) Update() error {
-	o := orm.NewOrm()
-	_, err := o.Update(m)
-	return err
+	return DB.Save(m).Error
 }
 
 func (m *Attachment) Delete() error {
-	o := orm.NewOrm()
-
-	_, err := o.Delete(m)
+	err := DB.Delete(m).Error
 
 	if err == nil {
 		if err1 := os.Remove(m.FilePath); err1 != nil {
-			logs.Error(err1)
+			logger.Error(err1)
 		}
 	}
 
@@ -84,45 +67,40 @@ func (m *Attachment) Find(id int) (*Attachment, error) {
 	if id <= 0 {
 		return m, ErrInvalidParameter
 	}
-	o := orm.NewOrm()
 
-	err := o.QueryTable(m.TableNameWithPrefix()).Filter("attachment_id", id).One(m)
+	err := DB.Table(m.TableName()).Where("attachment_id = ?", id).First(m).Error
 
 	return m, err
 }
 
 // 查询指定文档的附件列表
 func (m *Attachment) FindListByDocumentId(docId int) (attaches []*Attachment, err error) {
-	o := orm.NewOrm()
-
-	_, err = o.QueryTable(m.TableNameWithPrefix()).Filter("document_id", docId).Filter("book_id__gt", 0).OrderBy("-attachment_id").All(&attaches)
+	err = DB.Table(m.TableName()).Where("document_id = ? AND book_id > ?", docId, 0).Order("attachment_id DESC").Find(&attaches).Error
 	return
 }
 
 // 分页查询附件
 func (m *Attachment) FindToPager(pageIndex, pageSize int) (attachList []*AttachmentResult, totalCount int, err error) {
-	o := orm.NewOrm()
-
-	total, err := o.QueryTable(m.TableNameWithPrefix()).Count()
+	var c int64
+	err = DB.Table(m.TableName()).Count(&c).Error
 
 	if err != nil {
-
 		return nil, 0, err
 	}
-	totalCount = int(total)
+	totalCount = int(c)
 
 	var list []*Attachment
 
 	offset := (pageIndex - 1) * pageSize
 	if pageSize == 0 {
-		_, err = o.QueryTable(m.TableNameWithPrefix()).OrderBy("-attachment_id").Offset(offset).Limit(pageSize).All(&list)
+		err = DB.Table(m.TableName()).Order("attachment_id DESC").Offset(offset).Limit(pageSize).Find(&list).Error
 	} else {
-		_, err = o.QueryTable(m.TableNameWithPrefix()).OrderBy("-attachment_id").All(&list)
+		err = DB.Table(m.TableName()).Order("attachment_id DESC").Find(&list).Error
 	}
 
 	if err != nil {
-		if err == orm.ErrNoRows {
-			logs.Info("没有查到附件 ->", err)
+		if err == gorm.ErrRecordNotFound {
+			logger.Info("没有查到附件 ->", err)
 			err = nil
 		}
 		return
@@ -135,7 +113,7 @@ func (m *Attachment) FindToPager(pageIndex, pageSize int) (attachList []*Attachm
 		//当项目ID为0标识是文章的附件
 		if item.BookId == 0 && item.DocumentId > 0 {
 			blog := NewBlog()
-			if err := o.QueryTable(blog.TableNameWithPrefix()).Filter("blog_id", item.DocumentId).One(blog, "blog_title"); err == nil {
+			if err := DB.Table(blog.TableName()).Select("blog_title").Where("blog_id = ?", item.DocumentId).First(blog).Error; err == nil {
 				attach.BookName = blog.BlogTitle
 			} else {
 				attach.BookName = "[文章不存在]"
@@ -143,12 +121,12 @@ func (m *Attachment) FindToPager(pageIndex, pageSize int) (attachList []*Attachm
 		} else {
 			book := NewBook()
 
-			if e := o.QueryTable(book.TableNameWithPrefix()).Filter("book_id", item.BookId).One(book, "book_name"); e == nil {
+			if e := DB.Table(book.TableName()).Select("book_name").Where("book_id = ?", item.BookId).First(book).Error; e == nil {
 				attach.BookName = book.BookName
 
 				doc := NewDocument()
 
-				if e := o.QueryTable(doc.TableNameWithPrefix()).Filter("document_id", item.DocumentId).One(doc, "document_name"); e == nil {
+				if e := DB.Table(doc.TableName()).Select("document_name").Where("document_id = ?", item.DocumentId).First(doc).Error; e == nil {
 					attach.DocumentName = doc.DocumentName
 				} else {
 					attach.DocumentName = "[文档不存在]"

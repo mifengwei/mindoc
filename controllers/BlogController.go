@@ -13,9 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"gorm.io/gorm"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/beego/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
@@ -42,6 +41,7 @@ func (c *BlogController) Index() {
 
 	if blogId <= 0 {
 		c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.page_not_existed"))
+		return
 	}
 	blogReadSession := fmt.Sprintf("blog:read:%d", blogId)
 
@@ -49,6 +49,7 @@ func (c *BlogController) Index() {
 
 	if err != nil {
 		c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.blog_not_existed"))
+		return
 	}
 
 	if c.Ctx.Input.IsPost() {
@@ -101,7 +102,7 @@ func (c *BlogController) List() {
 
 	blogList, totalCount, err = models.NewBlog().FindToPager(pageIndex, conf.PageSize, 0, "")
 
-	if err != nil && err != orm.ErrNoRows {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.ShowErrorPage(500, err.Error())
 	}
 	if totalCount > 0 {
@@ -258,7 +259,7 @@ func (c *BlogController) ManageSetting() {
 		blog.Password = blogPassword
 
 		if err := blog.Save(); err != nil {
-			logs.Error("保存文章失败 -> ", err)
+			logger.Error("保存文章失败 -> ", err)
 			c.JsonResult(6011, i18n.Tr(c.Lang, "message.failed"))
 		} else {
 			c.JsonResult(0, "ok", blog)
@@ -313,7 +314,7 @@ func (c *BlogController) ManageEdit() {
 			blog, err = models.NewBlog().FindByIdAndMemberId(blogId, c.Member.MemberId)
 		}
 		if err != nil {
-			logs.Error("查询文章失败 ->", err)
+			logger.Error("查询文章失败 ->", err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.query_failed"))
 		}
 		if version > 0 && blog.Version != version && cover != "yes" {
@@ -323,7 +324,7 @@ func (c *BlogController) ManageEdit() {
 		if blog.BlogType == 1 {
 			doc, err := models.NewDocument().Find(blog.DocumentId)
 			if err != nil {
-				logs.Error("查询关联项目文档时出错 ->", err)
+				logger.Error("查询关联项目文档时出错 ->", err)
 				c.JsonResult(6003, i18n.Tr(c.Lang, "message.query_failed"))
 			}
 			book, err := models.NewBook().Find(doc.BookId)
@@ -336,7 +337,7 @@ func (c *BlogController) ManageEdit() {
 				bookResult, err := models.NewBookResult().FindByIdentify(book.Identify, c.Member.MemberId)
 
 				if err != nil || bookResult.RoleId == conf.BookObserver {
-					logs.Error("FindByIdentify => ", err)
+					logger.Error("FindByIdentify => ", err)
 					c.JsonResult(6002, i18n.Tr(c.Lang, "message.ref_doc_not_exist_or_no_permit"))
 				}
 			}
@@ -347,7 +348,7 @@ func (c *BlogController) ManageEdit() {
 			doc.ModifyTime = time.Now()
 			doc.ModifyAt = c.Member.MemberId
 			if err := doc.InsertOrUpdate("markdown", "release", "content", "modify_time", "modify_at"); err != nil {
-				logs.Error("保存关联文档时出错 ->", err)
+				logger.Error("保存关联文档时出错 ->", err)
 				c.JsonResult(6004, i18n.Tr(c.Lang, "message.failed"))
 			}
 		}
@@ -358,7 +359,7 @@ func (c *BlogController) ManageEdit() {
 		blog.Modified = time.Now()
 
 		if err := blog.Save("blog_content", "blog_release", "modify_at", "modify_time", "version"); err != nil {
-			logs.Error("保存文章失败 -> ", err)
+			logger.Error("保存文章失败 -> ", err)
 			c.JsonResult(6011, i18n.Tr(c.Lang, "message.failed"))
 		} else {
 			c.JsonResult(0, "ok", blog)
@@ -386,7 +387,7 @@ func (c *BlogController) ManageEdit() {
 	if len(blog.AttachList) > 0 {
 		returnJSON, err := json.Marshal(blog.AttachList)
 		if err != nil {
-			logs.Error("序列化文章附件时出错 ->", err)
+			logger.Error("序列化文章附件时出错 ->", err)
 		} else {
 			c.Data["AttachList"] = template.JS(string(returnJSON))
 		}
@@ -478,7 +479,7 @@ func (c *BlogController) Upload() {
 		c.JsonResult(6003, i18n.Tr(c.Lang, "message.upload_file_type_error"))
 	}
 	//如果文件类型设置为 * 标识不限制文件类型
-	if web.AppConfig.DefaultString("upload_file_ext", "") != "*" {
+	if conf.GetDefaultString("upload_file_ext", "") != "*" {
 		if !conf.IsAllowUploadFileExt(ext) {
 			c.JsonResult(6004, i18n.Tr(c.Lang, "message.upload_file_type_error"))
 		}
@@ -496,8 +497,8 @@ func (c *BlogController) Upload() {
 		_, err := models.NewBlog().FindByIdAndMemberId(blogId, c.Member.MemberId)
 
 		if err != nil {
-			logs.Error("查询文章时出错 -> ", err)
-			if err == orm.ErrNoRows {
+			logger.Error("查询文章时出错 -> ", err)
+			if err == gorm.ErrRecordNotFound {
 				c.JsonResult(6006, i18n.Tr(c.Lang, "message.no_permission"))
 			}
 
@@ -516,7 +517,7 @@ func (c *BlogController) Upload() {
 	err = c.SaveToFile(name, filePath)
 
 	if err != nil {
-		logs.Error("SaveToFile => ", err)
+		logger.Error("SaveToFile => ", err)
 		c.JsonResult(6005, i18n.Tr(c.Lang, "message.failed"))
 	}
 
@@ -549,14 +550,14 @@ func (c *BlogController) Upload() {
 
 		if err := attachment.Insert(); err != nil {
 			os.Remove(filePath)
-			logs.Error("保存文件附件失败 -> ", err)
+			logger.Error("保存文件附件失败 -> ", err)
 			c.JsonResult(6006, i18n.Tr(c.Lang, "message.failed"))
 		}
 		if attachment.HttpPath == "" {
 			attachment.HttpPath = conf.URLForNotHost("BlogController.Download", ":id", blogId, ":attach_id", attachment.AttachmentId)
 
 			if err := attachment.Update(); err != nil {
-				logs.Error("保存文件失败 -> ", attachment.FilePath, err)
+				logger.Error("保存文件失败 -> ", attachment.FilePath, err)
 				c.JsonResult(6005, i18n.Tr(c.Lang, "message.failed"))
 			}
 		}
@@ -584,7 +585,7 @@ func (c *BlogController) RemoveAttachment() {
 	}
 	blog, err := models.NewBlog().Find(blogId)
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.doc_not_exist"))
 		} else {
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.query_failed"))
@@ -593,7 +594,7 @@ func (c *BlogController) RemoveAttachment() {
 	attach, err := models.NewAttachment().Find(attachId)
 
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6002, i18n.Tr(c.Lang, "message.attachment_not_exist"))
 	}
 
@@ -601,7 +602,7 @@ func (c *BlogController) RemoveAttachment() {
 		_, err := models.NewBlog().FindByIdAndMemberId(attach.DocumentId, c.Member.MemberId)
 
 		if err != nil {
-			logs.Error(err)
+			logger.Error(err)
 			c.JsonResult(6003, i18n.Tr(c.Lang, "message.doc_not_exist"))
 		}
 	}
@@ -613,7 +614,7 @@ func (c *BlogController) RemoveAttachment() {
 	}
 
 	if err := attach.Delete(); err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6005, i18n.Tr(c.Lang, "message.failed"))
 	}
 
@@ -632,7 +633,7 @@ func (c *BlogController) Download() {
 
 	blog, err := models.NewBlog().Find(blogId)
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.doc_not_exist"))
 		} else {
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.query_failed"))
@@ -648,10 +649,10 @@ func (c *BlogController) Download() {
 	attachment, err := models.NewAttachment().Find(attachId)
 
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.attachment_not_exist"))
 		} else {
-			logs.Error("查询附件时出现异常 -> ", err)
+			logger.Error("查询附件时出现异常 -> ", err)
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.query_failed"))
 		}
 	}

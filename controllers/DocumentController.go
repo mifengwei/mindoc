@@ -17,9 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"gorm.io/gorm"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/beego/i18n"
 	"github.com/boombuler/barcode"
 	"github.com/boombuler/barcode/qr"
@@ -100,10 +99,10 @@ func (c *DocumentController) Index() {
 	tree, err := models.NewDocument().CreateDocumentTreeForHtml(bookResult.BookId, selected)
 
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.no_doc_in_cur_proj"))
 		} else {
-			logs.Error("生成项目文档树时出错 -> ", err)
+			logger.Error("生成项目文档树时出错 -> ", err)
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.build_doc_tree_error"))
 		}
 	}
@@ -125,7 +124,7 @@ func (c *DocumentController) CheckPassword() {
 
 	// You have not logged in and need to log in again.
 	if !c.EnableAnonymous && !c.isUserLoggedIn() {
-		logs.Info("You have not logged in and need to log in again(SessionId: %s).",
+		logger.Info("You have not logged in and need to log in again(SessionId: %s).",
 			c.CruSession.SessionID(context.TODO()))
 		c.JsonResult(6000, i18n.Tr(c.Lang, "message.need_relogin"))
 		return
@@ -134,7 +133,7 @@ func (c *DocumentController) CheckPassword() {
 	book, err := models.NewBook().FindByFieldFirst("identify", identify)
 
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(500, i18n.Tr(c.Lang, "message.item_not_exist"))
 	}
 
@@ -170,17 +169,17 @@ func (c *DocumentController) Read() {
 	if docId, err := strconv.Atoi(id); err == nil {
 		doc, err = doc.FromCacheById(docId)
 		if err != nil || doc == nil {
-			logs.Error("从缓存中读取文档时失败 ->", err)
+			logger.Error("从缓存中读取文档时失败 ->", err)
 			c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.doc_not_exist"))
 			return
 		}
 	} else {
 		doc, err = doc.FromCacheByIdentify(id, bookResult.BookId)
 		if err != nil || doc == nil {
-			if err == orm.ErrNoRows {
+			if err == gorm.ErrRecordNotFound {
 				c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.doc_not_exist"))
 			} else {
-				logs.Error("从数据库查询文档时出错 ->", err)
+				logger.Error("从数据库查询文档时出错 ->", err)
 				c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.unknown_exception"))
 			}
 			return
@@ -201,7 +200,7 @@ func (c *DocumentController) Read() {
 	// prev,next
 	treeJson, err := models.NewDocument().FindDocumentTree2(bookResult.BookId)
 	if err != nil {
-		logs.Error("生成项目文档树时出错 ->", err)
+		logger.Error("生成项目文档树时出错 ->", err)
 	}
 
 	res := getTreeRecursive(treeJson, 0)
@@ -274,8 +273,8 @@ func (c *DocumentController) Read() {
 
 	tree, err := models.NewDocument().CreateDocumentTreeForHtml(bookResult.BookId, doc.DocumentId)
 
-	if err != nil && err != orm.ErrNoRows {
-		logs.Error("生成项目文档树时出错 ->", err)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		logger.Error("生成项目文档树时出错 ->", err)
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.build_doc_tree_error"))
 	}
 
@@ -346,7 +345,7 @@ func (c *DocumentController) resolveEditDocument(bookId int, id string) (*models
 	}
 
 	if doc == nil || doc.DocumentId <= 0 || doc.BookId != bookId {
-		return nil, orm.ErrNoRows
+		return nil, gorm.ErrRecordNotFound
 	}
 
 	return doc, nil
@@ -369,7 +368,7 @@ func (c *DocumentController) Edit() {
 
 	var err error
 	// 如果是管理者，则不判断权限
-	if c.Member.IsAdministrator() {
+	if c.Member != nil && c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
@@ -380,10 +379,10 @@ func (c *DocumentController) Edit() {
 		bookResult, err = models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 
 		if err != nil {
-			if err == orm.ErrNoRows || err == models.ErrPermissionDenied {
+			if err == gorm.ErrRecordNotFound || err == models.ErrPermissionDenied {
 				c.ShowErrorPage(403, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 			} else {
-				logs.Error("查询项目时出错 -> ", err)
+				logger.Error("查询项目时出错 -> ", err)
 				c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.system_error"))
 			}
 			return
@@ -406,7 +405,7 @@ func (c *DocumentController) Edit() {
 	trees, err := models.NewDocument().FindDocumentTree(bookResult.BookId)
 
 	if err != nil {
-		logs.Error("FindDocumentTree => ", err)
+		logger.Error("FindDocumentTree => ", err)
 	} else {
 		if len(trees) > 0 {
 			if jtree, err := json.Marshal(trees); err == nil {
@@ -417,7 +416,7 @@ func (c *DocumentController) Edit() {
 		}
 	}
 
-	c.Data["BaiDuMapKey"] = web.AppConfig.DefaultString("baidumapkey", "")
+	c.Data["BaiDuMapKey"] = conf.GetDefaultString("baidumapkey", "")
 
 	if conf.GetUploadFileSize() > 0 {
 		c.Data["UploadFileSize"] = conf.GetUploadFileSize()
@@ -427,10 +426,10 @@ func (c *DocumentController) Edit() {
 
 	selectedDocId := 0
 	if doc, err := c.resolveEditDocument(bookResult.BookId, c.Ctx.Input.Param(":id")); err != nil {
-		if err == orm.ErrNoRows || err == models.ErrDataNotExist {
+		if err == gorm.ErrRecordNotFound || err == models.ErrDataNotExist {
 			c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.doc_not_exist"))
 		} else {
-			logs.Error("resolveEditDocument => ", err)
+			logger.Error("resolveEditDocument => ", err)
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.system_error"))
 		}
 		return
@@ -461,10 +460,10 @@ func (c *DocumentController) Create() {
 	bookId := 0
 
 	// 如果是超级管理员则不判断权限
-	if c.Member.IsAdministrator() {
+	if c.Member != nil && c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
-			logs.Error(err)
+			logger.Error(err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_existed_or_no_permit"))
 		}
 
@@ -473,7 +472,7 @@ func (c *DocumentController) Create() {
 		bookResult, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 
 		if err != nil || bookResult.RoleId == conf.BookObserver {
-			logs.Error("FindByIdentify => ", err)
+			logger.Error("FindByIdentify => ", err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_existed_or_no_permit"))
 		}
 
@@ -517,7 +516,7 @@ func (c *DocumentController) Create() {
 	}
 
 	if err := document.InsertOrUpdate(); err != nil {
-		logs.Error("添加或更新文档时出错 -> ", err)
+		logger.Error("添加或更新文档时出错 -> ", err)
 		c.JsonResult(6005, i18n.Tr(c.Lang, "message.failed"))
 	} else {
 		c.JsonResult(0, "ok", document)
@@ -588,7 +587,7 @@ func (c *DocumentController) Upload() {
 		bookId := 0
 
 		// 如果是超级管理员，则不判断权限
-		if c.Member.IsAdministrator() {
+		if c.Member != nil && c.Member.IsAdministrator() {
 			book, err := models.NewBook().FindByFieldFirst("identify", identify)
 
 			if err != nil {
@@ -600,8 +599,8 @@ func (c *DocumentController) Upload() {
 			book, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 
 			if err != nil {
-				logs.Error("DocumentController.Edit => ", err)
-				if err == orm.ErrNoRows {
+				logger.Error("DocumentController.Edit => ", err)
+				if err == gorm.ErrRecordNotFound {
 					c.JsonResult(6006, i18n.Tr(c.Lang, "message.no_permission"))
 				}
 
@@ -654,7 +653,7 @@ func (c *DocumentController) Upload() {
 		dst, err := os.Create(filePath)
 		defer dst.Close()
 		if _, err := io.Copy(dst, file); err != nil {
-			logs.Error("保存文件失败 -> ", err)
+			logger.Error("保存文件失败 -> ", err)
 			c.JsonResult(6005, i18n.Tr(c.Lang, "message.failed"))
 		}
 
@@ -687,7 +686,7 @@ func (c *DocumentController) Upload() {
 
 		if err != nil {
 			os.Remove(filePath)
-			logs.Error("文件保存失败 ->", err)
+			logger.Error("文件保存失败 ->", err)
 			c.JsonResult(6006, i18n.Tr(c.Lang, "message.failed"))
 		}
 
@@ -695,7 +694,7 @@ func (c *DocumentController) Upload() {
 			attachment.HttpPath = conf.URLForNotHost("DocumentController.DownloadAttachment", ":key", identify, ":attach_id", attachment.AttachmentId)
 
 			if err := attachment.Update(); err != nil {
-				logs.Error("保存文件失败 ->", err)
+				logger.Error("保存文件失败 ->", err)
 				c.JsonResult(6005, i18n.Tr(c.Lang, "message.failed"))
 			}
 		}
@@ -744,10 +743,10 @@ func (c *DocumentController) DownloadAttachment() {
 		// 判断项目公开状态
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
-			if err == orm.ErrNoRows {
+			if err == gorm.ErrRecordNotFound {
 				c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.item_not_exist"))
 			} else {
-				logs.Error("查找项目时出错 ->", err)
+				logger.Error("查找项目时出错 ->", err)
 				c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.system_error"))
 			}
 		}
@@ -769,8 +768,8 @@ func (c *DocumentController) DownloadAttachment() {
 	attachment, err := models.NewAttachment().Find(attachId)
 
 	if err != nil {
-		logs.Error("查找附件时出错 -> ", err)
-		if err == orm.ErrNoRows {
+		logger.Error("查找附件时出错 -> ", err)
+		if err == gorm.ErrRecordNotFound {
 			c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.attachment_not_exist"))
 		} else {
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.system_error"))
@@ -797,21 +796,21 @@ func (c *DocumentController) RemoveAttachment() {
 	attach, err := models.NewAttachment().Find(attachId)
 
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6002, i18n.Tr(c.Lang, "message.attachment_not_exist"))
 	}
 
 	document, err := models.NewDocument().Find(attach.DocumentId)
 
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6003, i18n.Tr(c.Lang, "message.doc_not_exist"))
 	}
 
 	if c.Member.Role != conf.MemberSuperRole {
 		rel, err := models.NewRelationship().FindByBookIdAndMemberId(document.BookId, c.Member.MemberId)
 		if err != nil {
-			logs.Error(err)
+			logger.Error(err)
 			c.JsonResult(6004, i18n.Tr(c.Lang, "message.no_permission"))
 		}
 
@@ -822,7 +821,7 @@ func (c *DocumentController) RemoveAttachment() {
 
 	err = attach.Delete()
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6005, i18n.Tr(c.Lang, "message.failed"))
 	}
 
@@ -841,10 +840,10 @@ func (c *DocumentController) Delete() {
 	bookId := 0
 
 	// 如果是超级管理员则忽略权限判断
-	if c.Member.IsAdministrator() {
+	if c.Member != nil && c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
-			logs.Error("FindByIdentify => ", err)
+			logger.Error("FindByIdentify => ", err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 		}
 
@@ -853,7 +852,7 @@ func (c *DocumentController) Delete() {
 		bookResult, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 
 		if err != nil || bookResult.RoleId == conf.BookObserver {
-			logs.Error("FindByIdentify => ", err)
+			logger.Error("FindByIdentify => ", err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 		}
 
@@ -867,7 +866,7 @@ func (c *DocumentController) Delete() {
 	doc, err := models.NewDocument().Find(docId)
 
 	if err != nil {
-		logs.Error("Delete => ", err)
+		logger.Error("Delete => ", err)
 		c.JsonResult(6003, i18n.Tr(c.Lang, "message.failed"))
 	}
 	// 如果文档所属项目错误
@@ -901,7 +900,7 @@ func (c *DocumentController) Content() {
 	autoRelease := false
 
 	// 如果是超级管理员，则忽略权限
-	if c.Member.IsAdministrator() {
+	if c.Member != nil && c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil || book == nil {
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
@@ -914,7 +913,7 @@ func (c *DocumentController) Content() {
 		bookResult, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 
 		if err != nil || bookResult.RoleId == conf.BookObserver {
-			logs.Error("项目不存在或权限不足 -> ", err)
+			logger.Error("项目不存在或权限不足 -> ", err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 		}
 
@@ -944,7 +943,7 @@ func (c *DocumentController) Content() {
 		}
 
 		if doc.Version != version && !strings.EqualFold(isCover, "yes") {
-			logs.Info("%d|", version, doc.Version)
+			logger.Info("%d|", version, doc.Version)
 			c.JsonResult(6005, i18n.Tr(c.Lang, "message.confirm_override_doc"))
 		}
 
@@ -972,7 +971,7 @@ func (c *DocumentController) Content() {
 		doc.ModifyAt = c.Member.MemberId
 
 		if err := doc.InsertOrUpdate(); err != nil {
-			logs.Error("InsertOrUpdate => ", err)
+			logger.Error("InsertOrUpdate => ", err)
 			c.JsonResult(6006, i18n.Tr(c.Lang, "message.failed"))
 		}
 
@@ -982,7 +981,7 @@ func (c *DocumentController) Content() {
 			if c.EnableDocumentHistory && cryptil.Md5Crypt(history.Markdown) != cryptil.Md5Crypt(doc.Markdown) {
 				_, err = history.InsertOrUpdate()
 				if err != nil {
-					logs.Error("DocumentHistory InsertOrUpdate => ", err)
+					logger.Error("DocumentHistory InsertOrUpdate => ", err)
 				}
 			}
 		}(history)
@@ -993,7 +992,7 @@ func (c *DocumentController) Content() {
 				doc.Lang = c.Lang
 				err := doc.ReleaseContent()
 				if err == nil {
-					logs.Informational(i18n.Tr(c.Lang, "message.doc_auto_published")+"-> document_id=%d;document_name=%s", doc.DocumentId, doc.DocumentName)
+					logger.Infof(i18n.Tr(c.Lang, "message.doc_auto_published")+"-> document_id=%d;document_name=%s", doc.DocumentId, doc.DocumentName)
 				}
 			}()
 		}
@@ -1041,10 +1040,10 @@ func (c *DocumentController) Export() {
 	if c.Member != nil && c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByIdentify(identify)
 		if err != nil {
-			if err == orm.ErrNoRows {
+			if err == gorm.ErrRecordNotFound {
 				c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.item_not_exist"))
 			} else {
-				logs.Error("查找项目时出错 ->", err)
+				logger.Error("查找项目时出错 ->", err)
 				c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.system_error"))
 			}
 		}
@@ -1124,13 +1123,13 @@ func (c *DocumentController) QrCode() {
 	uri := conf.URLFor("DocumentController.Index", ":key", identify)
 	code, err := qr.Encode(uri, qr.L, qr.Unicode)
 	if err != nil {
-		logs.Error("生成二维码失败 ->", err)
+		logger.Error("生成二维码失败 ->", err)
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.gen_qrcode_failed"))
 	}
 
 	code, err = barcode.Scale(code, 150, 150)
 	if err != nil {
-		logs.Error("生成二维码失败 ->", err)
+		logger.Error("生成二维码失败 ->", err)
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.gen_qrcode_failed"))
 	}
 
@@ -1140,7 +1139,7 @@ func (c *DocumentController) QrCode() {
 
 	err = png.Encode(c.Ctx.ResponseWriter, code)
 	if err != nil {
-		logs.Error("生成二维码失败 ->", err)
+		logger.Error("生成二维码失败 ->", err)
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.gen_qrcode_failed"))
 	}
 }
@@ -1166,7 +1165,7 @@ func (c *DocumentController) Search() {
 
 	docs, err := models.NewDocumentSearchResult().SearchDocument(keyword, bookResult.BookId)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6002, i18n.Tr(c.Lang, "message.search_result_error"))
 	}
 
@@ -1197,10 +1196,10 @@ func (c *DocumentController) History() {
 	bookId := 0
 
 	// 如果是超级管理员则忽略权限判断
-	if c.Member.IsAdministrator() {
+	if c.Member != nil && c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
-			logs.Error("查找项目失败 ->", err)
+			logger.Error("查找项目失败 ->", err)
 			c.Data["ErrorMessage"] = i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit")
 			return
 		}
@@ -1210,7 +1209,7 @@ func (c *DocumentController) History() {
 	} else {
 		bookResult, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 		if err != nil || bookResult.RoleId == conf.BookObserver {
-			logs.Error("查找项目失败 ->", err)
+			logger.Error("查找项目失败 ->", err)
 			c.Data["ErrorMessage"] = i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit")
 			return
 		}
@@ -1226,7 +1225,7 @@ func (c *DocumentController) History() {
 
 	doc, err := models.NewDocument().Find(docId)
 	if err != nil {
-		logs.Error("Delete => ", err)
+		logger.Error("Delete => ", err)
 		c.Data["ErrorMessage"] = i18n.Tr(c.Lang, "message.get_doc_his_failed")
 		return
 	}
@@ -1239,7 +1238,7 @@ func (c *DocumentController) History() {
 
 	histories, totalCount, err := models.NewDocumentHistory().FindToPager(docId, pageIndex, conf.PageSize)
 	if err != nil {
-		logs.Error("分页查找文档历史失败 ->", err)
+		logger.Error("分页查找文档历史失败 ->", err)
 		c.Data["ErrorMessage"] = i18n.Tr(c.Lang, "message.get_doc_his_failed")
 		return
 	}
@@ -1270,10 +1269,10 @@ func (c *DocumentController) DeleteHistory() {
 	bookId := 0
 
 	// 如果是超级管理员则忽略权限判断
-	if c.Member.IsAdministrator() {
+	if c.Member != nil && c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
-			logs.Error("查找项目失败 ->", err)
+			logger.Error("查找项目失败 ->", err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 		}
 
@@ -1281,7 +1280,7 @@ func (c *DocumentController) DeleteHistory() {
 	} else {
 		bookResult, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 		if err != nil || bookResult.RoleId == conf.BookObserver {
-			logs.Error("查找项目失败 ->", err)
+			logger.Error("查找项目失败 ->", err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 		}
 
@@ -1294,7 +1293,7 @@ func (c *DocumentController) DeleteHistory() {
 
 	doc, err := models.NewDocument().Find(docId)
 	if err != nil {
-		logs.Error("Delete => ", err)
+		logger.Error("Delete => ", err)
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.get_doc_his_failed"))
 	}
 
@@ -1305,7 +1304,7 @@ func (c *DocumentController) DeleteHistory() {
 
 	err = models.NewDocumentHistory().Delete(historyId, docId)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6002, i18n.Tr(c.Lang, "message.failed"))
 	}
 
@@ -1328,10 +1327,10 @@ func (c *DocumentController) RestoreHistory() {
 
 	bookId := 0
 	// 如果是超级管理员则忽略权限判断
-	if c.Member.IsAdministrator() {
+	if c.Member != nil && c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
-			logs.Error("FindByIdentify => ", err)
+			logger.Error("FindByIdentify => ", err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 		}
 
@@ -1339,7 +1338,7 @@ func (c *DocumentController) RestoreHistory() {
 	} else {
 		bookResult, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 		if err != nil || bookResult.RoleId == conf.BookObserver {
-			logs.Error("FindByIdentify => ", err)
+			logger.Error("FindByIdentify => ", err)
 			c.JsonResult(6002, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 		}
 
@@ -1352,7 +1351,7 @@ func (c *DocumentController) RestoreHistory() {
 
 	doc, err := models.NewDocument().Find(docId)
 	if err != nil {
-		logs.Error("Delete => ", err)
+		logger.Error("Delete => ", err)
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.get_doc_his_failed"))
 	}
 
@@ -1363,7 +1362,7 @@ func (c *DocumentController) RestoreHistory() {
 
 	err = models.NewDocumentHistory().Restore(historyId, docId, c.Member.MemberId)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6002, i18n.Tr(c.Lang, "message.failed"))
 	}
 
@@ -1382,10 +1381,10 @@ func (c *DocumentController) Compare() {
 	editor := EditorMarkdown
 
 	// 如果是超级管理员则忽略权限判断
-	if c.Member.IsAdministrator() {
+	if c.Member != nil && c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
-			logs.Error("DocumentController.Compare => ", err)
+			logger.Error("DocumentController.Compare => ", err)
 			c.ShowErrorPage(403, i18n.Tr(c.Lang, "message.no_permission"))
 			return
 		}
@@ -1396,7 +1395,7 @@ func (c *DocumentController) Compare() {
 	} else {
 		bookResult, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 		if err != nil || bookResult.RoleId == conf.BookObserver {
-			logs.Error("FindByIdentify => ", err)
+			logger.Error("FindByIdentify => ", err)
 			c.ShowErrorPage(403, i18n.Tr(c.Lang, "message.no_permission"))
 			return
 		}
@@ -1412,7 +1411,7 @@ func (c *DocumentController) Compare() {
 
 	history, err := models.NewDocumentHistory().Find(historyId)
 	if err != nil {
-		logs.Error("DocumentController.Compare => ", err)
+		logger.Error("DocumentController.Compare => ", err)
 		c.ShowErrorPage(60003, err.Error())
 	}
 
@@ -1439,7 +1438,7 @@ func (c *DocumentController) isReadable(identify, token string) *models.BookResu
 	book, err := models.NewBook().FindByFieldFirst("identify", identify)
 
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.item_not_exist"))
 	}
 	bookResult := models.NewBookResult().ToBookResult(*book)
@@ -1471,7 +1470,7 @@ func (c *DocumentController) isReadable(identify, token string) *models.BookResu
 	 *   4. 使用token访问如果不通过，则提示输入密码
 	 */
 	if book.PrivatelyOwned == 1 {
-		if c.isUserLoggedIn() && c.Member.IsAdministrator() {
+		if c.isUserLoggedIn() && c.Member != nil && c.Member.IsAdministrator() {
 			return bookResult
 		}
 		if isOk { // Project participant.
@@ -1495,13 +1494,13 @@ func (c *DocumentController) isReadable(identify, token string) *models.BookResu
 			body, err := c.ExecuteViewPathTemplate("document/document_password.tpl",
 				map[string]string{"Identify": book.Identify, "Lang": c.Lang})
 			if err != nil {
-				logs.Error("显示密码页面失败 ->", err)
+				logger.Error("显示密码页面失败 ->", err)
 				c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.system_error"))
 			}
 			c.CustomAbort(200, body)
 		} else {
 			// No permission to access this book.
-			logs.Info("尝试访问文档但权限不足 ->", identify, token)
+			logger.Info("尝试访问文档但权限不足 ->", identify, token)
 			c.ShowErrorPage(403, i18n.Tr(c.Lang, "message.no_permission"))
 		}
 	}
@@ -1510,8 +1509,8 @@ func (c *DocumentController) isReadable(identify, token string) *models.BookResu
 }
 
 func promptUserToLogIn(c *DocumentController) {
-	logs.Info("Access " + c.Ctx.Request.URL.RequestURI() + " not permitted.")
-	logs.Info("  Access will be redirected to login page(SessionId: " + c.CruSession.SessionID(context.TODO()) + ").")
+	logger.Info("Access " + c.Ctx.Request.URL.RequestURI() + " not permitted.")
+	logger.Info("  Access will be redirected to login page(SessionId: " + c.CruSession.SessionID(context.TODO()) + ").")
 
 	if c.IsAjax() {
 		c.JsonResult(6000, i18n.Tr(c.Lang, "message.need_relogin"))

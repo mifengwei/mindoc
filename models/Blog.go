@@ -7,80 +7,63 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/cache"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/utils"
+	"gorm.io/gorm"
 )
 
 // 博文表
 type Blog struct {
-	BlogId int `orm:"pk;auto;unique;column(blog_id)" json:"blog_id"`
+	BlogId int `gorm:"primaryKey;autoIncrement;column:blog_id" json:"blog_id"`
 	//文章标题
-	BlogTitle string `orm:"column(blog_title);size(500);description(文章标题)" json:"blog_title"`
+	BlogTitle string `gorm:"column:blog_title;size:500" json:"blog_title"`
 	//文章标识
-	BlogIdentify string `orm:"column(blog_identify);size(100);unique;description(文章标识)" json:"blog_identify"`
+	BlogIdentify string `gorm:"column:blog_identify;size:100;uniqueIndex" json:"blog_identify"`
 	//排序序号
-	OrderIndex int `orm:"column(order_index);type(int);default(0);description(排序序号)" json:"order_index"`
+	OrderIndex int `gorm:"column:order_index;type:int;default:0" json:"order_index"`
 	//所属用户
-	MemberId int `orm:"column(member_id);type(int);default(0);index;description(所属用户)" json:"member_id"`
+	MemberId int `gorm:"column:member_id;type:int;default:0;index" json:"member_id"`
 	//用户头像
-	MemberAvatar string `orm:"-" json:"member_avatar"`
+	MemberAvatar string `gorm:"-" json:"member_avatar"`
 	//文章类型:0 普通文章/1 链接文章
-	BlogType int `orm:"column(blog_type);type(int);default(0);description(文章类型: 0普通文章/1 链接文章)" json:"blog_type"`
+	BlogType int `gorm:"column:blog_type;type:int;default:0" json:"blog_type"`
 	//链接到的项目中的文档ID
-	DocumentId int `orm:"column(document_id);type(int);default(0);description(链接到的项目中的文档ID)" json:"document_id"`
+	DocumentId int `gorm:"column:document_id;type:int;default:0" json:"document_id"`
 	//文章的标识
-	DocumentIdentify string `orm:"-" json:"document_identify"`
+	DocumentIdentify string `gorm:"-" json:"document_identify"`
 	//关联文档的项目标识
-	BookIdentify string `orm:"-" json:"book_identify"`
+	BookIdentify string `gorm:"-" json:"book_identify"`
 	//关联文档的项目ID
-	BookId int `orm:"-" json:"book_id"`
+	BookId int `gorm:"-" json:"book_id"`
 	//文章摘要
-	BlogExcerpt string `orm:"column(blog_excerpt);size(1500);description(文章摘要)" json:"blog_excerpt"`
+	BlogExcerpt string `gorm:"column:blog_excerpt;size:1500" json:"blog_excerpt"`
 	//文章内容
-	BlogContent string `orm:"column(blog_content);type(text);null;description(文章内容)" json:"blog_content"`
+	BlogContent string `gorm:"column:blog_content;type:text" json:"blog_content"`
 	//发布后的文章内容
-	BlogRelease string `orm:"column(blog_release);type(text);null;description(发布后的文章内容)" json:"blog_release"`
-	//文章当前的状态，枚举enum(’publish’,’draft’,’password’)值，publish为已 发表，draft为草稿，password 为私人内容(不会被公开) 。默认为publish。
-	BlogStatus string `orm:"column(blog_status);size(100);default(publish);description(状态：publish为已发表-默认，draft:草稿，password :私人内容-不会被公开)" json:"blog_status"`
+	BlogRelease string `gorm:"column:blog_release;type:text" json:"blog_release"`
+	//文章当前的状态，枚举enum('publish','draft','password')值，publish为已 发表，draft为草稿，password 为私人内容(不会被公开) 。默认为publish。
+	BlogStatus string `gorm:"column:blog_status;size:100;default:publish" json:"blog_status"`
 	//文章密码，varchar(100)值。文章编辑才可为文章设定一个密码，凭这个密码才能对文章进行重新强加或修改。
-	Password string `orm:"column(password);size(100);description(文章密码)" json:"-"`
+	Password string `gorm:"column:password;size:100" json:"-"`
 	//最后修改时间
-	Modified time.Time `orm:"column(modify_time);type(datetime);auto_now;description(最后修改时间)" json:"modify_time"`
+	Modified time.Time `gorm:"column:modify_time;type:datetime;autoUpdateTime" json:"modify_time"`
 	//修改人id
-	ModifyAt       int    `orm:"column(modify_at);type(int);description(修改人id)" json:"-"`
-	ModifyRealName string `orm:"-" json:"modify_real_name"`
+	ModifyAt       int    `gorm:"column:modify_at;type:int" json:"-"`
+	ModifyRealName string `gorm:"-" json:"modify_real_name"`
 	//创建时间
-	Created    time.Time `orm:"column(create_time);type(datetime);auto_now_add;description(创建时间)" json:"create_time"`
-	CreateName string    `orm:"-" json:"create_name"`
+	Created    time.Time `gorm:"column:create_time;type:datetime;autoCreateTime" json:"create_time"`
+	CreateName string    `gorm:"-" json:"create_name"`
 	//版本号
-	Version int64 `orm:"type(bigint);column(version);description(版本号)" json:"version"`
+	Version int64 `gorm:"type:bigint;column:version" json:"version"`
 	//附件列表
-	AttachList []*Attachment `orm:"-" json:"attach_list"`
-}
-
-// 多字段唯一键
-func (b *Blog) TableUnique() [][]string {
-	return [][]string{
-		{"blog_id", "blog_identify"},
-	}
+	AttachList []*Attachment `gorm:"-" json:"attach_list"`
 }
 
 // TableName 获取对应数据库表名.
 func (b *Blog) TableName() string {
-	return "blogs"
-}
-
-// TableEngine 获取数据使用的引擎.
-func (b *Blog) TableEngine() string {
-	return "INNODB"
-}
-
-func (b *Blog) TableNameWithPrefix() string {
-	return conf.GetDatabasePrefix() + b.TableName()
+	return conf.GetDatabasePrefix() + "blogs"
 }
 
 func NewBlog() *Blog {
@@ -91,11 +74,9 @@ func NewBlog() *Blog {
 
 // 根据文章ID查询文章
 func (b *Blog) Find(blogId int) (*Blog, error) {
-	o := orm.NewOrm()
-
-	err := o.QueryTable(b.TableNameWithPrefix()).Filter("blog_id", blogId).One(b)
+	err := DB.Table(b.TableName()).Where("blog_id = ?", blogId).First(b).Error
 	if err != nil {
-		logs.Error("查询文章时失败 -> ", err)
+		logger.Error("查询文章时失败 -> ", err)
 		return nil, err
 	}
 
@@ -110,17 +91,17 @@ func (b *Blog) FindFromCache(blogId int) (blog *Blog, err error) {
 	if err == nil {
 		b = &temp
 		b.Link()
-		logs.Debug("从缓存读取文章成功 ->", key)
+		logger.Debug("从缓存读取文章成功 ->", key)
 		return b, nil
 	} else {
-		logs.Error("读取缓存失败 ->", err)
+		logger.Error("读取缓存失败 ->", err)
 	}
 
 	blog, err = b.Find(blogId)
 	if err == nil {
 		//默认一个小时
 		if err := cache.Put(key, blog, time.Hour*1); err != nil {
-			logs.Error("将文章存入缓存失败 ->", err)
+			logger.Error("将文章存入缓存失败 ->", err)
 		}
 	}
 	return
@@ -128,11 +109,9 @@ func (b *Blog) FindFromCache(blogId int) (blog *Blog, err error) {
 
 // 查找指定用户的指定文章
 func (b *Blog) FindByIdAndMemberId(blogId, memberId int) (*Blog, error) {
-	o := orm.NewOrm()
-
-	err := o.QueryTable(b.TableNameWithPrefix()).Filter("blog_id", blogId).Filter("member_id", memberId).One(b)
+	err := DB.Table(b.TableName()).Where("blog_id = ?", blogId).Where("member_id = ?", memberId).First(b).Error
 	if err != nil {
-		logs.Error("查询文章时失败 -> ", err)
+		logger.Error("查询文章时失败 -> ", err)
 		return nil, err
 	}
 
@@ -141,11 +120,9 @@ func (b *Blog) FindByIdAndMemberId(blogId, memberId int) (*Blog, error) {
 
 // 根据文章标识查询文章
 func (b *Blog) FindByIdentify(identify string) (*Blog, error) {
-	o := orm.NewOrm()
-
-	err := o.QueryTable(b.TableNameWithPrefix()).Filter("blog_identify", identify).One(b)
+	err := DB.Table(b.TableName()).Where("blog_identify = ?", identify).First(b).Error
 	if err != nil {
-		logs.Error("查询文章时失败 -> ", err)
+		logger.Error("查询文章时失败 -> ", err)
 		return nil, err
 	}
 	return b, nil
@@ -153,12 +130,11 @@ func (b *Blog) FindByIdentify(identify string) (*Blog, error) {
 
 // 获取指定文章的链接内容
 func (b *Blog) Link() (*Blog, error) {
-	o := orm.NewOrm()
 	//如果是链接文章，则需要从链接的项目中查找文章内容
 	if b.BlogType == 1 && b.DocumentId > 0 {
 		doc := NewDocument()
-		if err := o.QueryTable(doc.TableNameWithPrefix()).Filter("document_id", b.DocumentId).One(doc, "release", "markdown", "identify", "book_id"); err != nil {
-			logs.Error("查询文章链接对象时出错 -> ", err)
+		if err := DB.Table(doc.TableName()).Where("document_id = ?", b.DocumentId).First(doc, "release", "markdown", "identify", "book_id").Error; err != nil {
+			logger.Error("查询文章链接对象时出错 -> ", err)
 		} else {
 			b.DocumentIdentify = doc.Identify
 			b.BlogRelease = doc.Release
@@ -166,8 +142,8 @@ func (b *Blog) Link() (*Blog, error) {
 			//目前仅支持markdown文档进行链接
 			b.BlogContent = doc.Markdown
 			book := NewBook()
-			if err := o.QueryTable(book.TableNameWithPrefix()).Filter("book_id", doc.BookId).One(book, "identify"); err != nil {
-				logs.Error("查询关联文档的项目时出错 ->", err)
+			if err := DB.Table(book.TableName()).Where("book_id = ?", doc.BookId).First(book, "identify").Error; err != nil {
+				logger.Error("查询关联文档的项目时出错 ->", err)
 			} else {
 				b.BookIdentify = book.Identify
 				b.BookId = doc.BookId
@@ -178,17 +154,17 @@ func (b *Blog) Link() (*Blog, error) {
 				if html, err := content.Html(); err == nil {
 					b.BlogRelease = html
 				} else {
-					logs.Error("处理文章失败 ->", err)
+					logger.Error("处理文章失败 ->", err)
 				}
 			} else {
-				logs.Error("处理文章失败 ->", err)
+				logger.Error("处理文章失败 ->", err)
 			}
 		}
 	}
 
 	if b.ModifyAt > 0 {
 		member := NewMember()
-		if err := o.QueryTable(member.TableNameWithPrefix()).Filter("member_id", b.ModifyAt).One(member, "real_name", "account"); err == nil {
+		if err := DB.Table(member.TableName()).Where("member_id = ?", b.ModifyAt).First(member, "real_name", "account").Error; err == nil {
 			if member.RealName != "" {
 				b.ModifyRealName = member.RealName
 			} else {
@@ -198,7 +174,7 @@ func (b *Blog) Link() (*Blog, error) {
 	}
 	if b.MemberId > 0 {
 		member := NewMember()
-		if err := o.QueryTable(member.TableNameWithPrefix()).Filter("member_id", b.MemberId).One(member, "real_name", "account", "avatar"); err == nil {
+		if err := DB.Table(member.TableName()).Where("member_id = ?", b.MemberId).First(member, "real_name", "account", "avatar").Error; err == nil {
 			if member.RealName != "" {
 				b.CreateName = member.RealName
 			} else {
@@ -213,21 +189,20 @@ func (b *Blog) Link() (*Blog, error) {
 
 // 判断指定的文章标识是否存在
 func (b *Blog) IsExist(identify string) bool {
-	o := orm.NewOrm()
-
-	return o.QueryTable(b.TableNameWithPrefix()).Filter("blog_identify", identify).Exist()
+	var count int64
+	DB.Table(b.TableName()).Where("blog_identify = ?", identify).Count(&count)
+	return count > 0
 }
 
 // 保存文章
 func (b *Blog) Save(cols ...string) error {
-	o := orm.NewOrm()
-
 	if b.OrderIndex <= 0 {
 		blog := NewBlog()
-		if err := o.QueryTable(blog.TableNameWithPrefix()).OrderBy("-blog_id").Limit(1).One(blog, "blog_id"); err == nil {
+		if err := DB.Table(b.TableName()).Order("blog_id DESC").Limit(1).First(blog, "blog_id").Error; err == nil {
 			b.OrderIndex = blog.BlogId + 1
 		} else {
-			c, _ := o.QueryTable(b.TableNameWithPrefix()).Count()
+			var c int64
+			DB.Table(b.TableName()).Count(&c)
 			b.OrderIndex = int(c) + 1
 		}
 	}
@@ -237,14 +212,18 @@ func (b *Blog) Save(cols ...string) error {
 
 	if b.BlogId > 0 {
 		b.Modified = time.Now()
-		_, err = o.Update(b, cols...)
+		if len(cols) > 0 {
+			err = DB.Select(cols).Save(b).Error
+		} else {
+			err = DB.Save(b).Error
+		}
 		key := fmt.Sprintf("blog-id-%d", b.BlogId)
 		_ = cache.Delete(key)
 
 	} else {
 
 		b.Created = time.Now()
-		_, err = o.Insert(b)
+		err = DB.Create(b).Error
 	}
 
 	if err == nil && b.BlogId > 0 {
@@ -257,7 +236,7 @@ func (b *Blog) Save(cols ...string) error {
 			content = blogTitle + "\n" + content
 			content = utils.StripTags(content)
 			if err := BuildIndexForBlog(blogId, content); err != nil {
-				logs.Error("构建Blog倒排索引失败 ->", blogId, err)
+				logger.Error("构建Blog倒排索引失败 ->", blogId, err)
 			}
 		}(b.BlogId, b.BlogTitle, b.BlogRelease, b.BlogContent)
 	}
@@ -288,7 +267,7 @@ func (b *Blog) Processor() *Blog {
 			}
 		})
 		//设置图片为CDN地址
-		if cdnimg, _ := web.AppConfig.String("cdnimg"); cdnimg != "" {
+		if cdnimg, _ := conf.GetString("cdnimg"); cdnimg != "" {
 			content.Find("img").Each(func(i int, contentSelection *goquery.Selection) {
 				if src, ok := contentSelection.Attr("src"); ok && strings.HasPrefix(src, "/uploads/") {
 					contentSelection.SetAttr("src", utils.JoinURI(cdnimg, src))
@@ -303,39 +282,48 @@ func (b *Blog) Processor() *Blog {
 // 分页查询文章列表
 func (b *Blog) FindToPager(pageIndex, pageSize int, memberId int, status string) (blogList []*Blog, totalCount int, err error) {
 
-	o := orm.NewOrm()
-
 	offset := (pageIndex - 1) * pageSize
 
-	query := o.QueryTable(b.TableNameWithPrefix())
+	query := DB.Table(b.TableName())
 
 	if memberId > 0 {
-		query = query.Filter("member_id", memberId)
+		query = query.Where("member_id = ?", memberId)
 	}
 	if status != "" && status != "all" {
-		query = query.Filter("blog_status", status)
+		query = query.Where("blog_status = ?", status)
 	}
 
 	if status == "" {
-		query = query.Filter("blog_status__ne", "private")
+		query = query.Where("blog_status != ?", "private")
 	}
 
-	_, err = query.OrderBy("-order_index", "-blog_id").Offset(offset).Limit(pageSize).All(&blogList)
-
-	if err != nil {
-		if err == orm.ErrNoRows {
-			err = nil
-		}
-		logs.Error("获取文章列表时出错 ->", err)
-		return
+	// Build count query separately since Find consumes the session
+	countQuery := DB.Table(b.TableName())
+	if memberId > 0 {
+		countQuery = countQuery.Where("member_id = ?", memberId)
 	}
-	count, err := query.Count()
-
-	if err != nil {
-		logs.Error("获取文章数量时出错 ->", err)
+	if status != "" && status != "all" {
+		countQuery = countQuery.Where("blog_status = ?", status)
+	}
+	if status == "" {
+		countQuery = countQuery.Where("blog_status != ?", "private")
+	}
+	var c int64
+	if err := countQuery.Count(&c).Error; err != nil {
+		logger.Error("获取文章数量时出错 ->", err)
 		return nil, 0, err
 	}
-	totalCount = int(count)
+	totalCount = int(c)
+
+	err = query.Order("order_index DESC, blog_id DESC").Offset(offset).Limit(pageSize).Find(&blogList).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			err = nil
+		}
+		logger.Error("获取文章列表时出错 ->", err)
+		return
+	}
 	for _, blog := range blogList {
 		if blog.BlogType == 1 {
 			blog.Link()
@@ -350,51 +338,48 @@ func (b *Blog) Delete(blogId int) error {
 	// 删除文章缓存
 	key := fmt.Sprintf("blog-id-%d", blogId)
 	_ = cache.Delete(key)
-	o := orm.NewOrm()
 
 	// 删除博客的倒排索引
 	index := NewContentReverseIndex()
 	_ = index.DeleteByContentTypeAndContentId(2, blogId)
 
-	_, err := o.QueryTable(b.TableNameWithPrefix()).Filter("blog_id", blogId).Delete()
+	err := DB.Table(b.TableName()).Where("blog_id = ?", blogId).Delete(nil).Error
 	if err != nil {
-		logs.Error("删除文章失败 ->", err)
+		logger.Error("删除文章失败 ->", err)
 	}
 	return err
 }
 
 // 查询下一篇文章
 func (b *Blog) QueryNext(blogId int) (*Blog, error) {
-	o := orm.NewOrm()
 	blog := NewBlog()
 
-	if err := o.QueryTable(b.TableNameWithPrefix()).Filter("blog_id", blogId).One(blog, "order_index"); err != nil {
-		logs.Error("查询文章时出错 ->", err)
+	if err := DB.Table(b.TableName()).Where("blog_id = ?", blogId).First(blog, "order_index").Error; err != nil {
+		logger.Error("查询文章时出错 ->", err)
 		return b, err
 	}
 
-	err := o.QueryTable(b.TableNameWithPrefix()).Filter("order_index__gte", blog.OrderIndex).Filter("blog_id__gt", blogId).OrderBy("order_index", "blog_id").One(blog)
+	err := DB.Table(b.TableName()).Where("order_index >= ?", blog.OrderIndex).Where("blog_id > ?", blogId).Order("order_index ASC, blog_id ASC").First(blog).Error
 
-	if err != nil && err != orm.ErrNoRows {
-		logs.Error("查询文章时出错 ->", err)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		logger.Error("查询文章时出错 ->", err)
 	}
 	return blog, err
 }
 
 // 查询下一篇文章
 func (b *Blog) QueryPrevious(blogId int) (*Blog, error) {
-	o := orm.NewOrm()
 	blog := NewBlog()
 
-	if err := o.QueryTable(b.TableNameWithPrefix()).Filter("blog_id", blogId).One(blog, "order_index"); err != nil {
-		logs.Error("查询文章时出错 ->", err)
+	if err := DB.Table(b.TableName()).Where("blog_id = ?", blogId).First(blog, "order_index").Error; err != nil {
+		logger.Error("查询文章时出错 ->", err)
 		return b, err
 	}
 
-	err := o.QueryTable(b.TableNameWithPrefix()).Filter("order_index__lte", blog.OrderIndex).Filter("blog_id__lt", blogId).OrderBy("-order_index", "-blog_id").One(blog)
+	err := DB.Table(b.TableName()).Where("order_index <= ?", blog.OrderIndex).Where("blog_id < ?", blogId).Order("order_index DESC, blog_id DESC").First(blog).Error
 
-	if err != nil && err != orm.ErrNoRows {
-		logs.Error("查询文章时出错 ->", err)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		logger.Error("查询文章时出错 ->", err)
 	}
 	return blog, err
 }
@@ -402,20 +387,18 @@ func (b *Blog) QueryPrevious(blogId int) (*Blog, error) {
 // 关联文章附件
 func (b *Blog) LinkAttach() (err error) {
 
-	o := orm.NewOrm()
-
 	var attachList []*Attachment
 	//当不是关联文章时，用文章ID去查询附件
 	if b.BlogType != 1 || b.DocumentId <= 0 {
-		_, err = o.QueryTable(NewAttachment().TableNameWithPrefix()).Filter("document_id", b.BlogId).Filter("book_id", 0).All(&attachList)
-		if err != nil && err != orm.ErrNoRows {
-			logs.Error("查询文章附件时出错 ->", err)
+		err = DB.Table(NewAttachment().TableName()).Where("document_id = ?", b.BlogId).Where("book_id = ?", 0).Find(&attachList).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			logger.Error("查询文章附件时出错 ->", err)
 		}
 	} else {
-		_, err = o.QueryTable(NewAttachment().TableNameWithPrefix()).Filter("document_id", b.DocumentId).Filter("book_id", b.BookId).All(&attachList)
+		err = DB.Table(NewAttachment().TableName()).Where("document_id = ?", b.DocumentId).Where("book_id = ?", b.BookId).Find(&attachList).Error
 
-		if err != nil && err != orm.ErrNoRows {
-			logs.Error("查询文章附件时出错 ->", err)
+		if err != nil && err != gorm.ErrRecordNotFound {
+			logger.Error("查询文章附件时出错 ->", err)
 		}
 	}
 	b.AttachList = attachList

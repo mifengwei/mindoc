@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -48,7 +48,7 @@ func (d *DingTalkAgent) GetUserIDByCode(code string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -86,7 +86,7 @@ func (d *DingTalkAgent) GetUserNameAndAvatarByUserID(userid string) (string, str
 	if err != nil {
 		return "", "", err
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", "", err
 	}
@@ -125,7 +125,7 @@ func (d *DingTalkAgent) GetUserIDByUnionID(unionid string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -157,7 +157,7 @@ func (d *DingTalkAgent) GetAccesstoken() (err error) {
 	if err != nil {
 		return err
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func (d *DingtalkQRLogin) GetUnionIDByCode(code string) (userid string, err erro
 		return "", err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}

@@ -2,16 +2,17 @@ package daemon
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
 	"github.com/kardianos/service"
 
 	"github.com/mindoc-org/mindoc/commands"
 	"github.com/mindoc-org/mindoc/conf"
-	"github.com/mindoc-org/mindoc/controllers"
+	"github.com/mindoc-org/mindoc/pkg/logger"
+	"github.com/mindoc-org/mindoc/routers"
 )
 
 type Daemon struct {
@@ -22,9 +23,9 @@ type Daemon struct {
 func NewDaemon() *Daemon {
 
 	config := &service.Config{
-		Name:             "mindocd",                               //服务显示名称
-		DisplayName:      "MinDoc service",                        //服务名称
-		Description:      "A document online management program.", //服务描述
+		Name:             "mindocd",
+		DisplayName:      "MinDoc service",
+		Description:      "A document online management program.",
 		WorkingDirectory: conf.WorkingDirectory,
 		Arguments:        os.Args[1:],
 	}
@@ -52,10 +53,6 @@ func (d *Daemon) Run() {
 
 	commands.RegisterAutoLoadConfig()
 
-	commands.RegisterError()
-
-	web.ErrorController(&controllers.ErrorController{})
-
 	f, err := filepath.Abs(os.Args[0])
 
 	if err != nil {
@@ -64,7 +61,21 @@ func (d *Daemon) Run() {
 
 	fmt.Printf("MinDoc version => %s\nbuild time => %s\nexecutable => %s\n%s\n", conf.VERSION, conf.BUILD_TIME, f, conf.GO_VERSION)
 
-	web.Run()
+	// 使用 Gin 引擎启动
+	engine := routers.SetupRouter()
+
+	port := conf.GetDefaultString("httpport", "8181")
+	port = strings.Trim(port, "\"'")
+	bindAddr := conf.GetDefaultString("httpaddr", "")
+	listenAddr := ":" + port
+	if bindAddr != "" {
+		listenAddr = bindAddr + ":" + port
+	}
+	fmt.Printf("Listening on %s\n", listenAddr)
+
+	if err := http.ListenAndServe(listenAddr, engine); err != nil {
+		logger.Error("Server error: ", err)
+	}
 }
 
 func (d *Daemon) Stop(s service.Service) error {
@@ -81,15 +92,15 @@ func Install() {
 	s, err := service.New(d, d.config)
 
 	if err != nil {
-		logs.Error("Create service error => ", err)
+		logger.Error("Create service error => ", err)
 		os.Exit(1)
 	}
 	err = s.Install()
 	if err != nil {
-		logs.Error("Install service error:", err)
+		logger.Error("Install service error:", err)
 		os.Exit(1)
 	} else {
-		logs.Info("Service installed!")
+		logger.Info("Service installed!")
 	}
 
 	os.Exit(0)
@@ -100,15 +111,15 @@ func Uninstall() {
 	s, err := service.New(d, d.config)
 
 	if err != nil {
-		logs.Error("Create service error => ", err)
+		logger.Error("Create service error => ", err)
 		os.Exit(1)
 	}
 	err = s.Uninstall()
 	if err != nil {
-		logs.Error("Install service error:", err)
+		logger.Error("Install service error:", err)
 		os.Exit(1)
 	} else {
-		logs.Info("Service uninstalled!")
+		logger.Info("Service uninstalled!")
 	}
 	os.Exit(0)
 }
@@ -118,15 +129,15 @@ func Restart() {
 	s, err := service.New(d, d.config)
 
 	if err != nil {
-		logs.Error("Create service error => ", err)
+		logger.Error("Create service error => ", err)
 		os.Exit(1)
 	}
 	err = s.Restart()
 	if err != nil {
-		logs.Error("Install service error:", err)
+		logger.Error("Install service error:", err)
 		os.Exit(1)
 	} else {
-		logs.Info("Service Restart!")
+		logger.Info("Service Restart!")
 	}
 	os.Exit(0)
 }

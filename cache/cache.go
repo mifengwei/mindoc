@@ -7,11 +7,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/beego/beego/v2/client/cache"
-	"github.com/beego/beego/v2/core/logs"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 )
 
-var bm cache.Cache
+var bm Cache
 
 var nilctx = context.TODO()
 
@@ -34,7 +33,7 @@ func Get(key string, e interface{}) error {
 		err := decoder.Decode(e)
 
 		if err != nil {
-			logs.Error("反序列化对象失败 ->", err)
+			logger.Error("反序列化对象失败 ->", err)
 		}
 		return err
 	} else if s, ok := val.(string); ok && s != "" {
@@ -46,7 +45,7 @@ func Get(key string, e interface{}) error {
 		err := decoder.Decode(e)
 
 		if err != nil {
-			logs.Error("反序列化对象失败 ->", err)
+			logger.Error("反序列化对象失败 ->", err)
 		}
 		return err
 	}
@@ -61,7 +60,7 @@ func Put(key string, val interface{}, timeout time.Duration) error {
 
 	err := encoder.Encode(val)
 	if err != nil {
-		logs.Error("序列化对象失败 ->", err)
+		logger.Error("序列化对象失败 ->", err)
 		return err
 	}
 
@@ -88,7 +87,7 @@ func StartAndGC(config string) error {
 	return bm.StartAndGC(config)
 }
 
-//Init will initialize cache
-func Init(c cache.Cache) {
+// Init 初始化缓存
+func Init(c Cache) {
 	bm = c
 }

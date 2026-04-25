@@ -5,7 +5,6 @@ package converter
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -253,13 +252,13 @@ func (this *Converter) generateMetaInfo() (err error) {
     `
 	folder := filepath.Join(this.BasePath, "META-INF")
 	os.MkdirAll(folder, os.ModePerm)
-	err = ioutil.WriteFile(filepath.Join(folder, "container.xml"), []byte(xml), os.ModePerm)
+	err = os.WriteFile(filepath.Join(folder, "container.xml"), []byte(xml), os.ModePerm)
 	return
 }
 
 //形成mimetyppe
 func (this *Converter) generateMimeType() (err error) {
-	return ioutil.WriteFile(filepath.Join(this.BasePath, "mimetype"), []byte("application/epub+zip"), os.ModePerm)
+	return os.WriteFile(filepath.Join(this.BasePath, "mimetype"), []byte("application/epub+zip"), os.ModePerm)
 }
 
 //生成封面
@@ -285,7 +284,7 @@ func (this *Converter) generateTitlePage() (err error) {
 					</body>
 				</html>
 		`
-		if err = ioutil.WriteFile(filepath.Join(this.BasePath, "titlepage.xhtml"), []byte(xml), os.ModePerm); err == nil {
+		if err = os.WriteFile(filepath.Join(this.BasePath, "titlepage.xhtml"), []byte(xml), os.ModePerm); err == nil {
 			this.GeneratedCover = "titlepage.xhtml"
 		}
 	}
@@ -310,7 +309,7 @@ func (this *Converter) generateTocNcx() (err error) {
 	`
 	codes, _ := this.tocToXml(0, 1)
 	ncx = fmt.Sprintf(ncx, this.Config.Language, html.EscapeString(this.Config.Title), strings.Join(codes, ""))
-	return ioutil.WriteFile(filepath.Join(this.BasePath, "toc.ncx"), []byte(ncx), os.ModePerm)
+	return os.WriteFile(filepath.Join(this.BasePath, "toc.ncx"), []byte(ncx), os.ModePerm)
 }
 
 //生成文档目录，即summary.html
@@ -332,7 +331,7 @@ func (this *Converter) generateSummary() (err error) {
 				</body>
 				</html>`
 	summary = fmt.Sprintf(summary, strings.Join(this.tocToSummary(0), ""))
-	return ioutil.WriteFile(filepath.Join(this.BasePath, "summary.html"), []byte(summary), os.ModePerm)
+	return os.WriteFile(filepath.Join(this.BasePath, "summary.html"), []byte(summary), os.ModePerm)
 }
 
 //将toc转成toc.ncx文件
@@ -486,7 +485,7 @@ func (this *Converter) generateContentOpf() (err error) {
 		guide = `<guide>` + guide + `</guide>`
 	}
 	pkg = fmt.Sprintf(pkg, meta, manifest, spine, guide)
-	return ioutil.WriteFile(filepath.Join(this.BasePath, "content.opf"), []byte(pkg), os.ModePerm)
+	return os.WriteFile(filepath.Join(this.BasePath, "content.opf"), []byte(pkg), os.ModePerm)
 }
 
 //转成epub

@@ -3,8 +3,8 @@ package controllers
 import (
 	"math"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
+	"gorm.io/gorm"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
 	"github.com/mindoc-org/mindoc/utils/pagination"
@@ -37,10 +37,10 @@ func (c *LabelController) Index() {
 	_, err := models.NewLabel().FindFirst("label_name", labelName)
 
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.Abort("404")
 		} else {
-			logs.Error(err)
+			logger.Error(err)
 			c.Abort("500")
 		}
 	}
@@ -50,8 +50,8 @@ func (c *LabelController) Index() {
 	}
 	searchResult, totalCount, err := models.NewBook().FindForLabelToPager(labelName, pageIndex, conf.PageSize, memberId)
 
-	if err != nil && err != orm.ErrNoRows {
-		logs.Error("查询标签时出错 ->", err)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		logger.Error("查询标签时出错 ->", err)
 		c.ShowErrorPage(500, "查询文档列表时出错")
 	}
 	if totalCount > 0 {
@@ -74,7 +74,7 @@ func (c *LabelController) List() {
 
 	labels, totalCount, err := models.NewLabel().FindToPager(pageIndex, pageSize)
 
-	if err != nil && err != orm.ErrNoRows {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.ShowErrorPage(500, err.Error())
 	}
 	if totalCount > 0 {

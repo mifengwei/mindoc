@@ -8,13 +8,12 @@ import (
 
 	"flag"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/beego/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
 	"github.com/mindoc-org/mindoc/utils"
+	"gorm.io/gorm"
 )
 
 //系统安装.
@@ -22,12 +21,10 @@ func Install() {
 
 	fmt.Println("Initializing...")
 
-	err := orm.RunSyncdb("default", false, true)
-	if err == nil {
-		initialization()
-	} else {
-		panic(err.Error())
-	}
+	RegisterDataBase()
+	RegisterModel()
+	initialization()
+
 	fmt.Println("Install Successfully!")
 	os.Exit(0)
 
@@ -52,7 +49,7 @@ func ModifyPassword() {
 		flagSet.StringVar(&password, "password", "", "用户密码.")
 
 		if err := flagSet.Parse(os.Args[2:]); err != nil {
-			logs.Error("解析参数失败 -> ", err)
+			logger.Error("解析参数失败 -> ", err)
 			os.Exit(1)
 		}
 
@@ -102,17 +99,17 @@ func initialization() {
 		panic(err.Error())
 	}
 
-	lang, _ := web.AppConfig.String("default_lang")
+	lang, _ := conf.GetString("default_lang")
 	err = i18n.SetMessage(lang, "conf/lang/"+lang+".ini")
 	if err != nil {
 		panic(fmt.Errorf("initialize locale error: %s", err))
 	}
 
 	member, err := models.NewMember().FindByFieldFirst("account", "admin")
-	if errors.Is(err, orm.ErrNoRows) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 
 		// create admin user
-		logs.Info("creating admin user")
+		logger.Info("creating admin user")
 		member.Account = "admin"
 		member.Avatar = conf.URLForWithCdnImage("/static/images/headimgurl.jpg")
 		member.Password = "123456"
@@ -125,7 +122,7 @@ func initialization() {
 		}
 
 		// create demo book
-		logs.Info("creating demo book")
+		logger.Info("creating demo book")
 		book := models.NewBook()
 
 		book.MemberId = member.MemberId

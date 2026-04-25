@@ -3,7 +3,6 @@ package models
 import (
 	"strings"
 
-	"github.com/beego/beego/v2/client/orm"
 	"github.com/mindoc-org/mindoc/utils/filetil"
 )
 
@@ -22,11 +21,10 @@ func NewAttachmentResult() *AttachmentResult {
 }
 
 func (m *AttachmentResult) Find(id int) (*AttachmentResult, error) {
-	o := orm.NewOrm()
 
 	attach := NewAttachment()
 
-	err := o.QueryTable(m.TableNameWithPrefix()).Filter("attachment_id", id).One(attach)
+	err := DB.Table(NewAttachment().TableName()).Where("attachment_id = ?", id).First(attach).Error
 
 	if err != nil {
 		return m, err
@@ -36,7 +34,7 @@ func (m *AttachmentResult) Find(id int) (*AttachmentResult, error) {
 
 	if attach.BookId == 0 && attach.DocumentId > 0 {
 		blog := NewBlog()
-		if err := o.QueryTable(blog.TableNameWithPrefix()).Filter("blog_id", attach.DocumentId).One(blog, "blog_title"); err == nil {
+		if err := DB.Table(NewBlog().TableName()).Where("blog_id = ?", attach.DocumentId).Select("blog_title").First(blog).Error; err == nil {
 			m.BookName = blog.BlogTitle
 		} else {
 			m.BookName = "[文章不存在]"
@@ -44,14 +42,14 @@ func (m *AttachmentResult) Find(id int) (*AttachmentResult, error) {
 	} else {
 		book := NewBook()
 
-		if e := o.QueryTable(book.TableNameWithPrefix()).Filter("book_id", attach.BookId).One(book, "book_name"); e == nil {
+		if e := DB.Table(NewBook().TableName()).Where("book_id = ?", attach.BookId).Select("book_name").First(book).Error; e == nil {
 			m.BookName = book.BookName
 		} else {
 			m.BookName = "[不存在]"
 		}
 		doc := NewDocument()
 
-		if e := o.QueryTable(doc.TableNameWithPrefix()).Filter("document_id", attach.DocumentId).One(doc, "document_name"); e == nil {
+		if e := DB.Table(NewDocument().TableName()).Where("document_id = ?", attach.DocumentId).Select("document_name").First(doc).Error; e == nil {
 			m.DocumentName = doc.DocumentName
 		} else {
 			m.DocumentName = "[不存在]"
@@ -59,7 +57,7 @@ func (m *AttachmentResult) Find(id int) (*AttachmentResult, error) {
 	}
 	if attach.CreateAt > 0 {
 		member := NewMember()
-		if e := o.QueryTable(member.TableNameWithPrefix()).Filter("member_id", attach.CreateAt).One(member, "account"); e == nil {
+		if e := DB.Table(NewMember().TableName()).Where("member_id = ?", attach.CreateAt).Select("account").First(member).Error; e == nil {
 			m.Account = member.Account
 		}
 	}

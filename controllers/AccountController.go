@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"gorm.io/gorm"
+
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/beego/i18n"
 	"github.com/lifei6671/gocaptcha"
 	"github.com/mindoc-org/mindoc/conf"
@@ -56,11 +56,11 @@ func (c *AccountController) IsInWorkWeixin() bool {
 
 func (c *AccountController) Prepare() {
 	c.BaseController.Prepare()
-	c.EnableXSRF = web.AppConfig.DefaultBool("enablexsrf", true)
+	c.EnableXSRF = conf.GetDefaultBool("enablexsrf", true)
 
 	c.Data["xsrfdata"] = template.HTML(c.XSRFFormHTML())
-	c.Data["CanLoginWorkWeixin"] = len(web.AppConfig.DefaultString("workweixin_corpid", "")) > 0
-	c.Data["CanLoginDingTalk"] = len(web.AppConfig.DefaultString("dingtalk_app_key", "")) > 0
+	c.Data["CanLoginWorkWeixin"] = len(conf.GetDefaultString("workweixin_corpid", "")) > 0
+	c.Data["CanLoginDingTalk"] = len(conf.GetDefaultString("dingtalk_app_key", "")) > 0
 
 	if !c.EnableXSRF {
 		return
@@ -154,7 +154,7 @@ func (c *AccountController) Login() {
 
 			c.JsonResult(0, "ok", c.referer())
 		} else {
-			logs.Error("用户登录 ->", err)
+			logger.Error("用户登录 ->", err)
 			c.JsonResult(500, i18n.Tr(c.Lang, "message.wrong_account_password"), nil)
 		}
 		return
@@ -208,9 +208,9 @@ func (c *AccountController) getAuth2Client() (auth2.Client, error) {
 		if can, _ := c.Data["CanLoginWorkWeixin"].(bool); !can {
 			return nil, errors.New("auth2.client.wecom.disabled")
 		}
-		corpId, _ := web.AppConfig.String("workweixin_corpid")
-		agentId, _ := web.AppConfig.String("workweixin_agentid")
-		secret, _ := web.AppConfig.String("workweixin_secret")
+		corpId, _ := conf.GetString("workweixin_corpid")
+		agentId, _ := conf.GetString("workweixin_agentid")
+		secret, _ := conf.GetString("workweixin_secret")
 		client = wecom.NewClient(corpId, agentId, secret)
 
 	case dingtalk.AppName:
@@ -218,8 +218,8 @@ func (c *AccountController) getAuth2Client() (auth2.Client, error) {
 			return nil, errors.New("auth2.client.dingtalk.disabled")
 		}
 
-		appKey, _ := web.AppConfig.String("dingtalk_app_key")
-		appSecret, _ := web.AppConfig.String("dingtalk_app_secret")
+		appKey, _ := conf.GetString("dingtalk_app_key")
+		appSecret, _ := conf.GetString("dingtalk_app_secret")
 		client = dingtalk.NewClient(appSecret, appKey)
 
 	default:
@@ -229,7 +229,7 @@ func (c *AccountController) getAuth2Client() (auth2.Client, error) {
 	var tokenCache auth2.AccessTokenCache
 	err := cache.Get(tokenKey, &tokenCache)
 	if err != nil {
-		logs.Info("AccessToken从缓存读取失败")
+		logger.Info("AccessToken从缓存读取失败")
 		token, err := client.GetAccessToken(context.Background())
 		if err != nil {
 			return client, nil
@@ -262,8 +262,8 @@ func (c *AccountController) parseAuth2CallbackParam() (code, state string) {
 		state = c.GetString("state")
 	}
 
-	logs.Debug("code: ", code)
-	logs.Debug("state: ", state)
+	logger.Debug("code: ", code)
+	logger.Debug("state: ", state)
 	return
 }
 
@@ -311,7 +311,7 @@ func (c *AccountController) Auth2Redirect() {
 		callback = conf.URLFor("AccountController.Auth2Callback", ":app", app, "url", url.PathEscape(u))
 	}
 
-	logs.Debug("callback: ", callback) // debug
+	logger.Debug("callback: ", callback) // debug
 	c.Redirect(client.BuildURL(callback, isAppBrowser), http.StatusFound)
 }
 
@@ -323,7 +323,7 @@ func (c *AccountController) Auth2Callback() {
 		c.SetMember(models.Member{})
 		c.SetSecureCookie(conf.GetAppKey(), "login", "", -3600)
 		c.StopRun()
-		logs.Error(err)
+		logger.Error(err)
 		return
 	}
 
@@ -364,7 +364,7 @@ func (c *AccountController) Auth2Callback() {
 	userInfoJson := "{}"
 	defer func() {
 		c.Data["bind_existed"] = template.JS(bindExisted)
-		logs.Debug("bind_existed: ", bindExisted)
+		logger.Debug("bind_existed: ", bindExisted)
 		c.Data["error_msg"] = template.JS(errMsg)
 		c.Data["user_info_json"] = template.JS(userInfoJson)
 		c.Data["app"] = template.JS(c.Ctx.Input.Param(":app"))
@@ -377,7 +377,7 @@ func (c *AccountController) Auth2Callback() {
 		c.SetMember(models.Member{})
 		c.SetSecureCookie(conf.GetAppKey(), "login", "", -3600)
 		errMsg = err.Error()
-		logs.Error(err)
+		logger.Error(err)
 		return
 	}
 
@@ -387,20 +387,20 @@ func (c *AccountController) Auth2Callback() {
 		c.SetMember(models.Member{})
 		c.SetSecureCookie(conf.GetAppKey(), "login", "", -3600)
 		errMsg = err.Error()
-		logs.Error(err)
+		logger.Error(err)
 		return
 	}
 
 	account, err := c.getAuth2Account()
 	if err != nil {
-		logs.Error("获取Auth2用户失败 ->", err)
+		logger.Error("获取Auth2用户失败 ->", err)
 		c.JsonResult(500, "不支持的第三方用户", nil)
 		return
 	}
 
 	member, err := account.ExistedMember(userInfo.UserId)
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			if userInfo.Mobile == "" {
 				errMsg = "请到应用浏览器中登录，并授权获取敏感信息。"
 			} else {
@@ -410,7 +410,7 @@ func (c *AccountController) Auth2Callback() {
 				c.SetSession(SessionUserInfoKey, userInfo)
 			}
 		} else {
-			logs.Error("Error: ", err)
+			logger.Error("Error: ", err)
 			errMsg = "登录错误: " + err.Error()
 		}
 		return
@@ -456,29 +456,23 @@ func (c *AccountController) Auth2BindAccount() {
 
 	member, err := models.NewMember().Login(account, password)
 	if err != nil {
-		logs.Error("用户登录 ->", err)
+		logger.Error("用户登录 ->", err)
 		c.JsonResult(500, "账号或密码错误", nil)
 		return
 	}
 
 	bindAccount, err := c.getAuth2Account()
 	if err != nil {
-		logs.Error("获取Auth2用户失败 ->", err)
+		logger.Error("获取Auth2用户失败 ->", err)
 		c.JsonResult(500, "不支持的第三方用户", nil)
 		return
 	}
 
 	member.CreateAt = 0
-	ormer := orm.NewOrm()
-	o, err := ormer.Begin()
-	if err != nil {
-		logs.Error("开启事务时出错 -> ", err)
-		c.JsonResult(500, "开启事务时出错: ", err.Error())
-		return
-	}
-	if err := bindAccount.AddBind(ormer, userInfo, member); err != nil {
-		logs.Error(err)
-		o.Rollback()
+	tx := models.GetDB().Begin()
+	if err := bindAccount.AddBind(userInfo, member); err != nil {
+		logger.Error(err)
+		tx.Rollback()
 		c.JsonResult(500, "绑定失败，数据库错误: "+err.Error())
 		return
 	}
@@ -492,16 +486,16 @@ func (c *AccountController) Auth2BindAccount() {
 	}
 	//member.Email = user_info.Email
 	//member.Phone = user_info.Mobile
-	if _, err := ormer.Update(member, "last_login_time", "real_name", "avatar", "email", "phone"); err != nil {
-		o.Rollback()
-		logs.Error("保存用户信息失败=>", err)
+	if err := tx.Model(member).Select("last_login_time", "real_name", "avatar", "email", "phone").Updates(member).Error; err != nil {
+		tx.Rollback()
+		logger.Error("保存用户信息失败=>", err)
 		c.JsonResult(500, "绑定失败，现有账户信息更新失败: "+err.Error())
 		return
 
 	}
 
-	if err := o.Commit(); err != nil {
-		logs.Error("开启事务时出错 -> ", err)
+	if err := tx.Commit().Error; err != nil {
+		logger.Error("开启事务时出错 -> ", err)
 		c.JsonResult(500, "开启事务时出错: ", err.Error())
 		return
 	}
@@ -526,7 +520,7 @@ func (c *AccountController) Auth2BindAccount() {
 // Auth2AutoAccount auth2.0自动创建账号
 func (c *AccountController) Auth2AutoAccount() {
 	app := c.Ctx.Input.Param(":app")
-	logs.Debug("app: ", app)
+	logger.Debug("app: ", app)
 
 	userInfo, ok := c.GetSession(SessionUserInfoKey).(auth2.UserInfo)
 	if !ok || len(userInfo.UserId) <= 0 {
@@ -543,13 +537,7 @@ func (c *AccountController) Auth2AutoAccount() {
 		return
 	}
 
-	ormer := orm.NewOrm()
-	o, err := ormer.Begin()
-	if err != nil {
-		logs.Error("开启事务时出错 -> ", err)
-		c.JsonResult(500, "开启事务时出错: ", err.Error())
-		return
-	}
+	tx := models.GetDB().Begin()
 
 	member.Account = userInfo.UserId
 	member.RealName = userInfo.Name
@@ -557,13 +545,13 @@ func (c *AccountController) Auth2AutoAccount() {
 	hash, err := utils.PasswordHash(member.Password)
 
 	if err != nil {
-		logs.Error("加密用户密码失败 =>", err)
+		logger.Error("加密用户密码失败 =>", err)
 		c.JsonResult(500, "加密用户密码失败"+err.Error())
 		return
 	}
 
-	logs.Debug("member.Password: ", member.Password)
-	logs.Debug("hash: ", hash)
+	logger.Debug("member.Password: ", member.Password)
+	logger.Debug("hash: ", hash)
 	member.Password = hash
 
 	member.Role = conf.MemberGeneralRole
@@ -575,29 +563,29 @@ func (c *AccountController) Auth2AutoAccount() {
 	member.Email = userInfo.Mail
 	member.Phone = userInfo.Mobile
 	member.Status = 0
-	if _, err = ormer.Insert(member); err != nil {
-		o.Rollback()
+	if err = tx.Create(member).Error; err != nil {
+		tx.Rollback()
 		c.JsonResult(500, "注册失败，数据库错误: "+err.Error())
 		return
 	}
 
 	account, err := c.getAuth2Account()
 	if err != nil {
-		logs.Error("获取Auth2用户失败 ->", err)
+		logger.Error("获取Auth2用户失败 ->", err)
 		c.JsonResult(500, "不支持的第三方用户", nil)
 		return
 	}
 
 	member.CreateAt = 0
-	if err := account.AddBind(ormer, userInfo, member); err != nil {
-		logs.Error(err)
-		o.Rollback()
+	if err := account.AddBind(userInfo, member); err != nil {
+		logger.Error(err)
+		tx.Rollback()
 		c.JsonResult(500, "注册失败，数据库错误: "+err.Error())
 		return
 	}
 
-	if err := o.Commit(); err != nil {
-		logs.Error("提交事务时出错 -> ", err)
+	if err := tx.Commit().Error; err != nil {
+		logger.Error("提交事务时出错 -> ", err)
 		c.JsonResult(500, "提交事务时出错: ", err.Error())
 		return
 	}
@@ -640,21 +628,21 @@ func (c *AccountController) Auth2AutoAccount() {
 //	dingtalkAgent := dingtalk.NewDingTalkAgent(appSecret, appKey)
 //	err := dingtalkAgent.GetAccesstoken()
 //	if err != nil {
-//		logs.Warn("获取钉钉临时Token失败 ->", err)
+//		logger.Warn("获取钉钉临时Token失败 ->", err)
 //		c.JsonResult(500, i18n.Tr(c.Lang, "message.failed_auto_login"), nil)
 //		c.StopRun()
 //	}
 //
 //	userid, err := dingtalkAgent.GetUserIDByCode(code)
 //	if err != nil {
-//		logs.Warn("获取钉钉用户ID失败 ->", err)
+//		logger.Warn("获取钉钉用户ID失败 ->", err)
 //		c.JsonResult(500, i18n.Tr(c.Lang, "message.failed_auto_login"), nil)
 //		c.StopRun()
 //	}
 //
 //	username, avatar, err := dingtalkAgent.GetUserNameAndAvatarByUserID(userid)
 //	if err != nil {
-//		logs.Warn("获取钉钉用户信息失败 ->", err)
+//		logger.Warn("获取钉钉用户信息失败 ->", err)
 //		c.JsonResult(500, i18n.Tr(c.Lang, "message.failed_auto_login"), nil)
 //		c.StopRun()
 //	}
@@ -675,7 +663,7 @@ func (c *AccountController) Auth2AutoAccount() {
 
 // WorkWeixinLogin 用户企业微信登录
 //func (c *AccountController) WorkWeixinLogin() {
-//	logs.Info("UserAgent: ", c.Ctx.Input.UserAgent()) // debug
+//	logger.Info("UserAgent: ", c.Ctx.Input.UserAgent()) // debug
 //
 //	if member, ok := c.GetSession(conf.LoginSessionName).(models.Member); ok && member.MemberId > 0 {
 //		u := c.GetString("url")
@@ -731,7 +719,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //		} else {
 //			callback_u = conf.URLFor("AccountController.WorkWeixinLoginCallback", "url", url.PathEscape(u))
 //		}
-//		logs.Info("callback_u: ", callback_u) // debug
+//		logger.Info("callback_u: ", callback_u) // debug
 //
 //		state := "mindoc"
 //		workweixinConf := conf.GetWorkWeixinConfig()
@@ -750,7 +738,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //			urlFmt := "%s?login_type=CorpApp&appid=%s&agentid=%s&redirect_uri=%s&state=%s"
 //			redirect_uri = fmt.Sprintf(urlFmt, WorkWeixin_QRConnectUrlBase, appid, agentid, url.PathEscape(callback_u), state)
 //		}
-//		logs.Info("redirect_uri: ", redirect_uri) // debug
+//		logger.Info("redirect_uri: ", redirect_uri) // debug
 //		c.Redirect(redirect_uri, 302)
 //	}
 //}
@@ -845,7 +833,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //						u = conf.URLFor("HomeController.Index")
 //					}
 //					c.Redirect(u, 302)
-//				} else if err == orm.ErrNoRows {
+//				} else if err == gorm.ErrRecordNotFound {
 //					bind_existed = "false"
 //					if ticket == "" {
 //						error_msg = "请到企业微信中登录，并授权获取敏感信息。"
@@ -861,7 +849,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //						}
 //					}
 //				} else {
-//					logs.Error("Error: ", err)
+//					logger.Error("Error: ", err)
 //					error_msg = "登录错误: " + err.Error()
 //				}
 //			} else {
@@ -884,14 +872,14 @@ func (c *AccountController) Auth2AutoAccount() {
 //	// - https://stackoverflow.com/questions/24411880/go-html-templates-can-i-stop-the-templates-package-inserting-quotes-around-stri
 //	// - https://stackoverflow.com/questions/38035176/insert-javascript-snippet-inside-template-with-beego-golang
 //	c.Data["bind_existed"] = template.JS(bind_existed)
-//	logs.Debug("bind_existed: ", bind_existed)
+//	logger.Debug("bind_existed: ", bind_existed)
 //	c.Data["error_msg"] = template.JS(error_msg)
 //	c.Data["user_info_json"] = template.JS(user_info_json)
 //	/*
 //		// 调试: 显示源码
 //		result, err := c.RenderString()
 //		if err != nil {
-//			logs.Error(err)
+//			logger.Error(err)
 //		} else {
 //			logs.Warning(result)
 //		}
@@ -915,7 +903,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //				ormer := orm.NewOrm()
 //				o, err := ormer.Begin()
 //				if err != nil {
-//					logs.Error("开启事务时出错 -> ", err)
+//					logger.Error("开启事务时出错 -> ", err)
 //					c.JsonResult(500, "开启事务时出错: ", err.Error())
 //				}
 //				if err := account.AddBind(ormer); err != nil {
@@ -933,11 +921,11 @@ func (c *AccountController) Auth2AutoAccount() {
 //					//member.Phone = user_info.Mobile
 //					if _, err := ormer.Update(member, "last_login_time", "real_name", "avatar", "email", "phone"); err != nil {
 //						o.Rollback()
-//						logs.Error("保存用户信息失败=>", err)
+//						logger.Error("保存用户信息失败=>", err)
 //						c.JsonResult(500, "绑定失败，现有账户信息更新失败: "+err.Error())
 //					} else {
 //						if err := o.Commit(); err != nil {
-//							logs.Error("开启事务时出错 -> ", err)
+//							logger.Error("开启事务时出错 -> ", err)
 //							c.JsonResult(500, "开启事务时出错: ", err.Error())
 //						} else {
 //							c.DelSession(SessionUserInfoKey)
@@ -960,7 +948,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //				}
 //
 //			} else {
-//				logs.Error("用户登录 ->", err)
+//				logger.Error("用户登录 ->", err)
 //				c.JsonResult(500, "账号或密码错误", nil)
 //			}
 //			c.JsonResult(500, "TODO: 绑定以后账号功能开发中")
@@ -987,7 +975,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //		ormer := orm.NewOrm()
 //		o, err := ormer.Begin()
 //		if err != nil {
-//			logs.Error("开启事务时出错 -> ", err)
+//			logger.Error("开启事务时出错 -> ", err)
 //			c.JsonResult(500, "开启事务时出错: ", err.Error())
 //		}
 //
@@ -1000,11 +988,11 @@ func (c *AccountController) Auth2AutoAccount() {
 //		member.Password = "123456" // 强制设置默认密码，需修改一次密码后，才可以进行账号密码登录
 //		hash, err := utils.PasswordHash(member.Password)
 //		if err != nil {
-//			logs.Error("加密用户密码失败 =>", err)
+//			logger.Error("加密用户密码失败 =>", err)
 //			c.JsonResult(500, "加密用户密码失败"+err.Error())
 //		} else {
-//			logs.Error("member.Password: ", member.Password)
-//			logs.Error("hash: ", hash)
+//			logger.Error("member.Password: ", member.Password)
+//			logger.Error("hash: ", hash)
 //			member.Password = hash
 //		}
 //		member.Role = conf.MemberGeneralRole
@@ -1029,7 +1017,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //				c.JsonResult(500, "注册失败，数据库错误: "+err.Error())
 //			} else {
 //				if err := o.Commit(); err != nil {
-//					logs.Error("提交事务时出错 -> ", err)
+//					logger.Error("提交事务时出错 -> ", err)
 //					c.JsonResult(500, "提交事务时出错: ", err.Error())
 //				} else {
 //					member.LastLoginTime = time.Now()
@@ -1078,7 +1066,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //		qrDingtalk := dingtalk.NewDingtalkQRLogin(appSecret, appKey)
 //		unionID, err := qrDingtalk.GetUnionIDByCode(code)
 //		if err != nil {
-//			logs.Warn("获取钉钉临时UnionID失败 ->", err)
+//			logger.Warn("获取钉钉临时UnionID失败 ->", err)
 //			c.Redirect(conf.URLFor("AccountController.Login"), 302)
 //			c.StopRun()
 //		}
@@ -1090,21 +1078,21 @@ func (c *AccountController) Auth2AutoAccount() {
 //		dingtalkAgent := dingtalk.NewDingTalkAgent(appSecret, appKey)
 //		err = dingtalkAgent.GetAccesstoken()
 //		if err != nil {
-//			logs.Warn("获取钉钉临时Token失败 ->", err)
+//			logger.Warn("获取钉钉临时Token失败 ->", err)
 //			c.Redirect(conf.URLFor("AccountController.Login"), 302)
 //			c.StopRun()
 //		}
 //
 //		userid, err := dingtalkAgent.GetUserIDByUnionID(unionID)
 //		if err != nil {
-//			logs.Warn("获取钉钉用户ID失败 ->", err)
+//			logger.Warn("获取钉钉用户ID失败 ->", err)
 //			c.Redirect(conf.URLFor("AccountController.Login"), 302)
 //			c.StopRun()
 //		}
 //
 //		username, avatar, err := dingtalkAgent.GetUserNameAndAvatarByUserID(userid)
 //		if err != nil {
-//			logs.Warn("获取钉钉用户信息失败 ->", err)
+//			logger.Warn("获取钉钉用户信息失败 ->", err)
 //			c.Redirect(conf.URLFor("AccountController.Login"), 302)
 //			c.StopRun()
 //		}
@@ -1251,7 +1239,7 @@ func (c *AccountController) FindPassword() {
 		count, err := models.NewMemberToken().FindSendCount(email, time.Now().Add(-1*time.Hour), time.Now())
 
 		if err != nil {
-			logs.Error(err)
+			logger.Error(err)
 			c.JsonResult(6008, i18n.Tr(c.Lang, "message.failed_send_mail"))
 		}
 		if count > mailConf.MailNumber {
@@ -1276,7 +1264,7 @@ func (c *AccountController) FindPassword() {
 
 		body, err := c.ExecuteViewPathTemplate("account/mail_template.tpl", data)
 		if err != nil {
-			logs.Error(err)
+			logger.Error(err)
 			c.JsonResult(6003, i18n.Tr(c.Lang, "message.failed_send_mail"))
 		}
 
@@ -1290,7 +1278,7 @@ func (c *AccountController) FindPassword() {
 				Secure:   mailConf.Secure,
 				Identity: "",
 			}
-			logs.Info(mailConfig)
+			logger.Info(mailConfig)
 
 			c := mail.NewSMTPClient(mailConfig)
 			m := mail.NewMail()
@@ -1302,9 +1290,9 @@ func (c *AccountController) FindPassword() {
 			m.AddTo(email)
 
 			if e := c.Send(m); e != nil {
-				logs.Error("发送邮件失败：" + e.Error())
+				logger.Error("发送邮件失败：" + e.Error())
 			} else {
-				logs.Info("邮件发送成功：" + email)
+				logger.Info("邮件发送成功：" + email)
 			}
 			//auth := smtp.PlainAuth(
 			//	"",
@@ -1324,7 +1312,7 @@ func (c *AccountController) FindPassword() {
 			//	[]byte(subject+mime+"\n"+body),
 			//)
 			//if err != nil {
-			//	logs.Error("邮件发送失败 => ", email, err)
+			//	logger.Error("邮件发送失败 => ", email, err)
 			//}
 		}(mailConf, email, body)
 
@@ -1337,7 +1325,7 @@ func (c *AccountController) FindPassword() {
 	if token != "" && email != "" {
 		memberToken, err := models.NewMemberToken().FindByFieldFirst("token", token)
 		if err != nil {
-			logs.Error(err)
+			logger.Error(err)
 			c.Data["ErrorMessage"] = i18n.Tr(c.Lang, "message.mail_expired")
 			c.TplName = "errors/error.tpl"
 			return
@@ -1387,7 +1375,7 @@ func (c *AccountController) ValidEmail() {
 	mailConf := conf.GetMailConfig()
 	memberToken, err := models.NewMemberToken().FindByFieldFirst("token", token)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6007, i18n.Tr(c.Lang, "message.mail_expired"))
 	}
 	subTime := time.Until(memberToken.SendTime)
@@ -1398,12 +1386,12 @@ func (c *AccountController) ValidEmail() {
 	}
 	member, err := models.NewMember().Find(memberToken.MemberId)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6005, i18n.Tr(c.Lang, "message.user_not_existed"))
 	}
 	hash, err := utils.PasswordHash(password1)
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6006, i18n.Tr(c.Lang, "message.failed_save_password"))
 	}
 
@@ -1415,7 +1403,7 @@ func (c *AccountController) ValidEmail() {
 	memberToken.InsertOrUpdate()
 
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		c.JsonResult(6006, i18n.Tr(c.Lang, "message.failed_save_password"))
 	}
 	c.JsonResult(0, "ok", conf.URLFor("AccountController.Login"))

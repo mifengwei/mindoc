@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/beego/beego/v2/client/orm"
+	"gorm.io/gorm"
 	"github.com/beego/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
@@ -27,7 +27,7 @@ func (c *TemplateController) isPermission() error {
 	if !c.Member.IsAdministrator() {
 		book, err := models.NewBookResult().FindByIdentify(bookIdentify, c.Member.MemberId)
 		if err != nil {
-			if err == orm.ErrNoRows {
+			if err == gorm.ErrRecordNotFound {
 				return errors.New("项目不存在或没有权限")
 			}
 			return errors.New("查询项目模板失败")
@@ -36,7 +36,7 @@ func (c *TemplateController) isPermission() error {
 	} else {
 		book, err := models.NewBook().FindByIdentify(bookIdentify, "book_id")
 		if err != nil {
-			if err == orm.ErrNoRows {
+			if err == gorm.ErrRecordNotFound {
 				return errors.New("项目不存在或没有权限")
 			}
 			return errors.New("查询项目模板失败")
@@ -74,7 +74,7 @@ func (c *TemplateController) List() {
 
 	templateList, err := models.NewTemplate().FindAllByBookId(c.BookId)
 
-	if err != nil && err != orm.ErrNoRows {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.Data["ErrorMessage"] = "查询项目模板失败"
 	}
 	if templateList != nil {

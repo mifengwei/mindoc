@@ -1,7 +1,5 @@
 package models
 
-import "github.com/beego/beego/v2/client/orm"
-
 type CommentResult struct {
 	Comment
 	Author       string `json:"author"`
@@ -9,8 +7,6 @@ type CommentResult struct {
 }
 
 func (m *CommentResult) FindForDocumentToPager(doc_id, page_index, page_size int) (comments []*CommentResult, totalCount int, err error) {
-
-	o := orm.NewOrm()
 
 	sql1 := `
 SELECT
@@ -23,16 +19,21 @@ FROM md_comments AS comment
   LEFT JOIN md_comments AS parent ON comment.parent_id = parent.comment_id
   LEFT JOIN md_members AS p_member ON p_member.member_id = parent.member_id
 
-WHERE comment.document_id = ? ORDER BY comment.comment_id DESC LIMIT 0,10`
+WHERE comment.document_id = ? ORDER BY comment.comment_id DESC LIMIT ?,?`
 
 	offset := (page_index - 1) * page_size
 
-	_, err = o.Raw(sql1, doc_id, offset, page_size).QueryRows(&comments)
+	err = DB.Raw(sql1, doc_id, offset, page_size).Scan(&comments).Error
 
-	v, err := o.QueryTable(m.TableNameWithPrefix()).Filter("document_id", doc_id).Count()
+	if err != nil {
+		return
+	}
+
+	var count int64
+	err = DB.Table(NewComment().TableName()).Where("document_id = ?", doc_id).Count(&count).Error
 
 	if err == nil {
-		totalCount = int(v)
+		totalCount = int(count)
 	}
 
 	return

@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/mindoc-org/mindoc/models"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/conf"
 )
 
@@ -21,14 +20,14 @@ func CheckUpdate() {
 	resp, err := http.Get("https://api.github.com/repos/mindoc-org/mindoc/tags")
 
 	if err != nil {
-		logs.Error("CheckUpdate => ", err)
+		logger.Error("CheckUpdate => ", err)
 		os.Exit(1)
 	}
 
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logs.Error("CheckUpdate => ", err)
+		logger.Error("CheckUpdate => ", err)
 		os.Exit(1)
 	}
 
@@ -38,7 +37,7 @@ func CheckUpdate() {
 
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		logs.Error("CheckUpdate => ", err)
+		logger.Error("CheckUpdate => ", err)
 		os.Exit(0)
 	}
 
@@ -54,12 +53,7 @@ func Update() {
 	fmt.Println("Update...")
 	RegisterDataBase()
 	RegisterModel()
-	err := orm.RunSyncdb("default", false, true)
-	if err == nil {
-		UpdateInitialization()
-	} else {
-		panic(err.Error())
-	}
+	UpdateInitialization()
 	fmt.Println("Update Successfully!")
 	os.Exit(0)
 }

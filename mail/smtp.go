@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"log"
 	"net/mail"
 	"net/smtp"
@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/beego/beego/v2/core/logs"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 )
 
 var (
@@ -248,7 +248,7 @@ func (c *SMTPClient) SendTLS(m Mail, message bytes.Buffer) error {
 
 	fmt.Println(c.smtpAuth)
 	if ok, s := ct.Extension("AUTH"); ok {
-		logs.Info(s)
+		logger.Info(s)
 		// Auth
 		if err = ct.Auth(c.smtpAuth); err != nil {
 			log.Println("Auth Error:",
@@ -397,7 +397,7 @@ func (m *Mail) AddAttachment(filePath string) error {
 
 // ReadAttachment reading attachment
 func (m *Mail) ReadAttachment(filePath string) (string, error) {
-	file, e := ioutil.ReadFile(filePath)
+	file, e := os.ReadFile(filePath)
 	if e != nil {
 		return "", e
 	}

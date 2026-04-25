@@ -4,19 +4,35 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/beego/beego/v2/server/web"
-	beegoContext "github.com/beego/beego/v2/server/web/context"
+	"github.com/gin-gonic/gin"
+	"github.com/mindoc-org/mindoc/conf"
 )
 
-// AuthMiddleware 返回一个中间件函数，用于验证MCP请求中的认证令牌
-func AuthMiddleware(ctx *beegoContext.Context) {
-	presetMcpApiKey := web.AppConfig.DefaultString("mcp_api_key", "")
-	mcpApiKeyParamValue := ctx.Request.URL.Query().Get("api_key")
-	if presetMcpApiKey != mcpApiKeyParamValue {
-		http.Error(ctx.ResponseWriter, "Missing or invalid mcp authorization key", http.StatusUnauthorized)
+// AuthMiddleware 返回一个 Gin 中间件，用于验证 MCP 请求中的认证令牌
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		presetMcpApiKey := conf.GetDefaultString("mcp_api_key", "")
+		mcpApiKeyParamValue := c.Query("api_key")
+		if presetMcpApiKey != "" && presetMcpApiKey != mcpApiKeyParamValue {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid mcp authorization key"})
+			return
+		}
+
+		// Add mcp_api_key to request context
+		ctx := context.WithValue(c.Request.Context(), "mcp_api_key", mcpApiKeyParamValue)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
+// AuthMiddlewareBeego 兼容旧的 Beego 调用方式
+func AuthMiddlewareBeego(w http.ResponseWriter, r *http.Request) {
+	presetMcpApiKey := conf.GetDefaultString("mcp_api_key", "")
+	mcpApiKeyParamValue := r.URL.Query().Get("api_key")
+	if presetMcpApiKey != "" && presetMcpApiKey != mcpApiKeyParamValue {
+		http.Error(w, "Missing or invalid mcp authorization key", http.StatusUnauthorized)
 		return
 	}
-
-	// Add mcp_api_key to request context
-	ctx.Request.WithContext(context.WithValue(ctx.Request.Context(), "mcp_api_key", mcpApiKeyParamValue))
+	ctx := context.WithValue(r.Context(), "mcp_api_key", mcpApiKeyParamValue)
+	_ = ctx
 }

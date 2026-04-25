@@ -10,9 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/utils"
 	"github.com/mindoc-org/mindoc/utils/segmenter"
@@ -26,29 +24,20 @@ const emptyIndexWord = "__mindoc_empty_index__"
 
 // ContentReverseIndex 倒排索引结构
 type ContentReverseIndex struct {
-	Id string `orm:"pk;column(id);size(64);description(唯一标识ID)" json:"id"`
+	Id string `gorm:"primaryKey;column:id;size:64" json:"id"`
 	// Word 分词词汇，最长64个字
-	Word string `orm:"column(word);size(64);index;description(分词词汇)" json:"word"`
+	Word string `gorm:"column:word;size:64;index" json:"word"`
 	// ContentType 内容类型：1-Document 2-Blog
-	ContentType int `orm:"column(content_type);type(int);index:idx_content_type_id,priority:1;description(内容类型：1-Document 2-Blog)" json:"content_type"`
+	ContentType int `gorm:"column:content_type;type:int;index:idx_content_type_id,priority:1" json:"content_type"`
 	// ContentId 内容ID，对应DocumentId或BlogId
-	ContentId int `orm:"column(content_id);type(int);index:idx_content_type_id,priority:2;description(内容ID)" json:"content_id"`
+	ContentId int `gorm:"column:content_id;type:int;index:idx_content_type_id,priority:2" json:"content_id"`
 	// WordCount 词频数
-	WordCount int `orm:"column(word_count);type(int);default(0);description(词频数)" json:"word_count"`
+	WordCount int `gorm:"column:word_count;type:int;default:0" json:"word_count"`
 }
 
 // TableName 获取对应数据库表名
 func (c *ContentReverseIndex) TableName() string {
-	return "t_content_reverse_index"
-}
-
-// TableEngine 获取数据使用的引擎
-func (c *ContentReverseIndex) TableEngine() string {
-	return "INNODB"
-}
-
-func (c *ContentReverseIndex) TableNameWithPrefix() string {
-	return conf.GetDatabasePrefix() + c.TableName()
+	return conf.GetDatabasePrefix() + "t_content_reverse_index"
 }
 
 func NewContentReverseIndex() *ContentReverseIndex {
@@ -70,9 +59,7 @@ func (c *ContentReverseIndex) Insert() error {
 		return errors.New("内容ID必须大于0")
 	}
 
-	o := orm.NewOrm()
-	_, err := o.Insert(c)
-	return err
+	return DB.Create(c).Error
 }
 
 // DeleteByContentTypeAndContentId 根据内容类型和内容ID删除所有倒排索引记录
@@ -84,9 +71,7 @@ func (c *ContentReverseIndex) DeleteByContentTypeAndContentId(contentType, conte
 		return errors.New("内容ID必须大于0")
 	}
 
-	o := orm.NewOrm()
-	_, err := o.QueryTable(c.TableNameWithPrefix()).Filter("content_type", contentType).Filter("content_id", contentId).Delete()
-	return err
+	return DB.Table(c.TableName()).Where("content_type = ?", contentType).Where("content_id = ?", contentId).Delete(nil).Error
 }
 
 // BatchInsert 批量插入倒排索引记录
@@ -95,9 +80,7 @@ func (c *ContentReverseIndex) BatchInsert(indices []*ContentReverseIndex) error 
 		return nil
 	}
 
-	o := orm.NewOrm()
-	_, err := o.InsertMulti(len(indices), indices)
-	return err
+	return DB.CreateInBatches(indices, len(indices)).Error
 }
 
 // ContentReverseIndexResult 倒排索引查询结果结构
@@ -125,8 +108,7 @@ func (c *ContentReverseIndex) FindByWords(words []string) ([]*ContentReverseInde
 		words = words[:maxWords]
 	}
 
-	o := orm.NewOrm()
-	tableName := c.TableNameWithPrefix()
+	tableName := c.TableName()
 	if !validTableName.MatchString(tableName) {
 		return nil, 0, errors.New("非法表名: " + tableName)
 	}
@@ -134,7 +116,7 @@ func (c *ContentReverseIndex) FindByWords(words []string) ([]*ContentReverseInde
 	// 计算总文档数
 	totalDocsSql := "SELECT COUNT(*) FROM (SELECT DISTINCT content_type, content_id FROM " + tableName + ") AS t"
 	var totalDocs int
-	err := o.Raw(totalDocsSql).QueryRow(&totalDocs)
+	err := DB.Raw(totalDocsSql).Scan(&totalDocs).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -158,7 +140,7 @@ func (c *ContentReverseIndex) FindByWords(words []string) ([]*ContentReverseInde
 		WordCount   int
 	}
 	var records []indexRecord
-	_, err = o.Raw(sql, wordArgs...).QueryRows(&records)
+	err = DB.Raw(sql, wordArgs...).Scan(&records).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -192,7 +174,7 @@ func (c *ContentReverseIndex) FindByWords(words []string) ([]*ContentReverseInde
 	for key, wordInfos := range docWords {
 		var contentType, contentId int
 		if _, err := fmt.Sscanf(key, "%d-%d", &contentType, &contentId); err != nil {
-			logs.Error("解析文档key失败 ->", key, err)
+			logger.Error("解析文档key失败 ->", key, err)
 			continue
 		}
 
@@ -288,7 +270,7 @@ func BuildIndexForDocument(documentId int, content string) error {
 	index := NewContentReverseIndex()
 	err := index.DeleteByContentTypeAndContentId(1, documentId)
 	if err != nil {
-		logs.Error("删除文档倒排索引失败 ->", documentId, err)
+		logger.Error("删除文档倒排索引失败 ->", documentId, err)
 		return err
 	}
 
@@ -336,7 +318,7 @@ func BuildIndexForBlog(blogId int, content string) error {
 	index := NewContentReverseIndex()
 	err := index.DeleteByContentTypeAndContentId(2, blogId)
 	if err != nil {
-		logs.Error("删除Blog倒排索引失败 ->", blogId, err)
+		logger.Error("删除Blog倒排索引失败 ->", blogId, err)
 		return err
 	}
 
@@ -369,7 +351,7 @@ func BuildIndexForBlog(blogId int, content string) error {
 	if len(indices) > 0 {
 		err = index.BatchInsert(indices)
 		if err != nil {
-			logs.Error("批量插入Blog倒排索引失败 ->", blogId, err)
+			logger.Error("批量插入Blog倒排索引失败 ->", blogId, err)
 			return err
 		}
 	}
@@ -382,9 +364,9 @@ func CheckDocumentIndexed(documentId int) bool {
 		return false
 	}
 
-	o := orm.NewOrm()
-	index := NewContentReverseIndex()
-	return o.QueryTable(index.TableNameWithPrefix()).Filter("content_type", 1).Filter("content_id", documentId).Exist()
+	var count int64
+	DB.Table(NewContentReverseIndex().TableName()).Where("content_type = ?", 1).Where("content_id = ?", documentId).Count(&count)
+	return count > 0
 }
 
 func CheckBlogIndexed(blogId int) bool {
@@ -392,16 +374,15 @@ func CheckBlogIndexed(blogId int) bool {
 		return false
 	}
 
-	o := orm.NewOrm()
-	index := NewContentReverseIndex()
-	return o.QueryTable(index.TableNameWithPrefix()).Filter("content_type", 2).Filter("content_id", blogId).Exist()
+	var count int64
+	DB.Table(NewContentReverseIndex().TableName()).Where("content_type = ?", 2).Where("content_id = ?", blogId).Count(&count)
+	return count > 0
 }
 
 func GetUnindexedDocuments(limit int) ([]*Document, error) {
-	o := orm.NewOrm()
 	var documents []*Document
-	docTable := NewDocument().TableNameWithPrefix()
-	indexTable := NewContentReverseIndex().TableNameWithPrefix()
+	docTable := NewDocument().TableName()
+	indexTable := NewContentReverseIndex().TableName()
 
 	if !validTableName.MatchString(docTable) || !validTableName.MatchString(indexTable) {
 		return nil, errors.New("非法表名")
@@ -414,19 +395,16 @@ func GetUnindexedDocuments(limit int) ([]*Document, error) {
 
 	if limit > 0 {
 		sql += " LIMIT ?"
-		_, err := o.Raw(sql, limit).QueryRows(&documents)
-		return documents, err
+		return documents, DB.Raw(sql, limit).Scan(&documents).Error
 	}
 
-	_, err := o.Raw(sql).QueryRows(&documents)
-	return documents, err
+	return documents, DB.Raw(sql).Scan(&documents).Error
 }
 
 func GetUnindexedBlogs(limit int) ([]*Blog, error) {
-	o := orm.NewOrm()
 	var blogs []*Blog
-	blogTable := NewBlog().TableNameWithPrefix()
-	indexTable := NewContentReverseIndex().TableNameWithPrefix()
+	blogTable := NewBlog().TableName()
+	indexTable := NewContentReverseIndex().TableName()
 
 	if !validTableName.MatchString(blogTable) || !validTableName.MatchString(indexTable) {
 		return nil, errors.New("非法表名")
@@ -439,21 +417,19 @@ func GetUnindexedBlogs(limit int) ([]*Blog, error) {
 
 	if limit > 0 {
 		sql += " LIMIT ?"
-		_, err := o.Raw(sql, limit).QueryRows(&blogs)
-		return blogs, err
+		return blogs, DB.Raw(sql, limit).Scan(&blogs).Error
 	}
 
-	_, err := o.Raw(sql).QueryRows(&blogs)
-	return blogs, err
+	return blogs, DB.Raw(sql).Scan(&blogs).Error
 }
 
 // InitializeMissingIndexes 初始化缺失的倒排索引
 func InitializeMissingIndexes() {
 	go func() {
-		logs.Info("开始检查并初始化缺失的倒排索引...")
+		logger.Info("开始检查并初始化缺失的倒排索引...")
 		InitializeMissingDocumentIndexes()
 		InitializeMissingBlogIndexes()
-		logs.Info("倒排索引初始化检查完成")
+		logger.Info("倒排索引初始化检查完成")
 	}()
 }
 
@@ -462,7 +438,7 @@ func InitializeMissingDocumentIndexes() {
 	for {
 		documents, err := GetUnindexedDocuments(batchSize)
 		if err != nil {
-			logs.Error("获取未索引文档失败 ->", err)
+			logger.Error("获取未索引文档失败 ->", err)
 			break
 		}
 
@@ -481,9 +457,9 @@ func InitializeMissingDocumentIndexes() {
 				content = utils.StripTags(content)
 				err := BuildIndexForDocument(doc.DocumentId, content)
 				if err != nil {
-					logs.Error("构建文档倒排索引失败 ->", doc.DocumentId, err)
+					logger.Error("构建文档倒排索引失败 ->", doc.DocumentId, err)
 				} else {
-					logs.Info("文档倒排索引构建成功 ->", doc.DocumentId)
+					logger.Info("文档倒排索引构建成功 ->", doc.DocumentId)
 				}
 			}
 		}
@@ -495,7 +471,7 @@ func InitializeMissingBlogIndexes() {
 	for {
 		blogs, err := GetUnindexedBlogs(batchSize)
 		if err != nil {
-			logs.Error("获取未索引Blog失败 ->", err)
+			logger.Error("获取未索引Blog失败 ->", err)
 			break
 		}
 
@@ -515,9 +491,9 @@ func InitializeMissingBlogIndexes() {
 
 				err := BuildIndexForBlog(blog.BlogId, content)
 				if err != nil {
-					logs.Error("构建Blog倒排索引失败 ->", blog.BlogId, err)
+					logger.Error("构建Blog倒排索引失败 ->", blog.BlogId, err)
 				} else {
-					logs.Info("Blog倒排索引构建成功 ->", blog.BlogId)
+					logger.Info("Blog倒排索引构建成功 ->", blog.BlogId)
 				}
 			}
 		}
@@ -532,50 +508,46 @@ var validTableName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 // 索引表将处于部分重建状态，此时搜索结果可能不完整。
 // 建议在业务低峰期执行，并在返回 error 时手动重新执行本命令。
 func RebuildAllIndexes() error {
-	logs.Info("开始全量重建倒排索引...")
+	logger.Info("开始全量重建倒排索引...")
 
 	// 清空倒排索引表
-	o := orm.NewOrm()
-	tableName := NewContentReverseIndex().TableNameWithPrefix()
+	tableName := NewContentReverseIndex().TableName()
 	if !validTableName.MatchString(tableName) {
 		err := errors.New("非法表名，拒绝执行: " + tableName)
-		logs.Error(err)
+		logger.Error(err)
 		return err
 	}
-	err := clearReverseIndexTable(o, tableName)
+	err := clearReverseIndexTable(tableName)
 	if err != nil {
-		logs.Error("清空倒排索引表失败 ->", err)
+		logger.Error("清空倒排索引表失败 ->", err)
 		return err
 	}
-	logs.Info("倒排索引表已清空")
+	logger.Info("倒排索引表已清空")
 
 	// 重建文档索引
 	if err := rebuildDocumentIndexes(); err != nil {
-		logs.Error("文档索引重建失败，索引表处于部分重建状态，请重新执行 reindex ->", err)
+		logger.Error("文档索引重建失败，索引表处于部分重建状态，请重新执行 reindex ->", err)
 		return err
 	}
 	// 重建博客索引
 	if err := rebuildBlogIndexes(); err != nil {
-		logs.Error("博客索引重建失败，索引表处于部分重建状态，请重新执行 reindex ->", err)
+		logger.Error("博客索引重建失败，索引表处于部分重建状态，请重新执行 reindex ->", err)
 		return err
 	}
 
-	logs.Info("全量重建倒排索引完成")
+	logger.Info("全量重建倒排索引完成")
 	return nil
 }
 
-func clearReverseIndexTable(o orm.Ormer, tableName string) error {
-	dbadapter, _ := web.AppConfig.String("db_adapter")
+func clearReverseIndexTable(tableName string) error {
+	dbadapter, _ := conf.GetString("db_adapter")
 	if strings.EqualFold(dbadapter, "sqlite3") {
-		_, err := o.Raw("DELETE FROM " + tableName).Exec()
-		return err
+		return DB.Exec("DELETE FROM " + tableName).Error
 	}
-	_, err := o.Raw("TRUNCATE TABLE " + tableName).Exec()
-	return err
+	return DB.Exec("TRUNCATE TABLE " + tableName).Error
 }
 
 func rebuildDocumentIndexes() error {
-	o := orm.NewOrm()
 	batchSize := 100
 	offset := 0
 	total := 0
@@ -584,12 +556,13 @@ func rebuildDocumentIndexes() error {
 
 	for {
 		var documents []*Document
-		_, err := o.QueryTable(NewDocument().TableNameWithPrefix()).
-			OrderBy("document_id").
-			Limit(batchSize, offset).
-			All(&documents)
+		err := DB.Table(NewDocument().TableName()).
+			Order("document_id ASC").
+			Offset(offset).
+			Limit(batchSize).
+			Find(&documents).Error
 		if err != nil {
-			logs.Error("查询文档失败 ->", err)
+			logger.Error("查询文档失败 ->", err)
 			return err
 		}
 		if len(documents) == 0 {
@@ -604,7 +577,7 @@ func rebuildDocumentIndexes() error {
 			content = doc.DocumentName + "\n" + content
 			content = utils.StripTags(content)
 			if err := BuildIndexForDocument(doc.DocumentId, content); err != nil {
-				logs.Error("重建文档倒排索引失败 ->", doc.DocumentId, err)
+				logger.Error("重建文档倒排索引失败 ->", doc.DocumentId, err)
 				failed++
 				if firstErr == nil {
 					firstErr = fmt.Errorf("document_id=%d: %w", doc.DocumentId, err)
@@ -615,9 +588,9 @@ func rebuildDocumentIndexes() error {
 		}
 
 		offset += batchSize
-		logs.Info("已重建文档索引:", total, "失败:", failed)
+		logger.Info("已重建文档索引:", total, "失败:", failed)
 	}
-	logs.Info("文档索引重建完成, 成功:", total, "失败:", failed)
+	logger.Info("文档索引重建完成, 成功:", total, "失败:", failed)
 	if failed > 0 {
 		return fmt.Errorf("文档索引重建存在 %d 条失败，首个错误: %w", failed, firstErr)
 	}
@@ -625,7 +598,6 @@ func rebuildDocumentIndexes() error {
 }
 
 func rebuildBlogIndexes() error {
-	o := orm.NewOrm()
 	batchSize := 100
 	offset := 0
 	total := 0
@@ -634,12 +606,13 @@ func rebuildBlogIndexes() error {
 
 	for {
 		var blogs []*Blog
-		_, err := o.QueryTable(NewBlog().TableNameWithPrefix()).
-			OrderBy("blog_id").
-			Limit(batchSize, offset).
-			All(&blogs)
+		err := DB.Table(NewBlog().TableName()).
+			Order("blog_id ASC").
+			Offset(offset).
+			Limit(batchSize).
+			Find(&blogs).Error
 		if err != nil {
-			logs.Error("查询博客失败 ->", err)
+			logger.Error("查询博客失败 ->", err)
 			return err
 		}
 		if len(blogs) == 0 {
@@ -654,7 +627,7 @@ func rebuildBlogIndexes() error {
 			content = blog.BlogTitle + "\n" + content
 			content = utils.StripTags(content)
 			if err := BuildIndexForBlog(blog.BlogId, content); err != nil {
-				logs.Error("重建Blog倒排索引失败 ->", blog.BlogId, err)
+				logger.Error("重建Blog倒排索引失败 ->", blog.BlogId, err)
 				failed++
 				if firstErr == nil {
 					firstErr = fmt.Errorf("blog_id=%d: %w", blog.BlogId, err)
@@ -665,9 +638,9 @@ func rebuildBlogIndexes() error {
 		}
 
 		offset += batchSize
-		logs.Info("已重建Blog索引:", total, "失败:", failed)
+		logger.Info("已重建Blog索引:", total, "失败:", failed)
 	}
-	logs.Info("Blog索引重建完成, 成功:", total, "失败:", failed)
+	logger.Info("Blog索引重建完成, 成功:", total, "失败:", failed)
 	if failed > 0 {
 		return fmt.Errorf("博客索引重建存在 %d 条失败，首个错误: %w", failed, firstErr)
 	}

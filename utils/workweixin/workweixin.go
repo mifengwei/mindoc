@@ -1,16 +1,17 @@
 package workweixin
 
 import (
-	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
-	"github.com/beego/beego/v2/client/httplib"
-	"github.com/beego/beego/v2/core/logs"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/cache"
 	"github.com/mindoc-org/mindoc/conf"
 )
@@ -22,6 +23,13 @@ const (
 	AccessTokenCacheKey = "access-token-cache-key"
 	// ContactAccessTokenCacheKey = "contact-access-token-cache-key"
 )
+
+var httpClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+	},
+	Timeout: 30 * time.Second,
+}
 
 // 获取访问凭据-请求响应结构
 type AccessTokenResponse struct {
@@ -125,34 +133,56 @@ type WorkWeixinUserInfo struct {
 	MainDepartment int    `json:"main_department"`   // 主部门
 }
 
-func httpFilter(next httplib.Filter) httplib.Filter {
-	return func(ctx context.Context, req *httplib.BeegoHTTPRequest) (*http.Response, error) {
-		r := req.GetRequest()
-		logs.Info("filter-url: ", r.URL)
-		// Never forget invoke this. Or the request will not be sent
-		return next(ctx, req)
+func httpGet(rawURL string, params map[string]string) ([]byte, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
 	}
+	q := u.Query()
+	for k, v := range params {
+		q.Set(k, v)
+	}
+	u.RawQuery = q.Encode()
+
+	logger.Info("request-url: ", u.String())
+	resp, err := httpClient.Get(u.String())
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func httpPost(rawURL string, body []byte) ([]byte, error) {
+	logger.Info("request-url: ", rawURL)
+	req, err := http.NewRequest(http.MethodPost, rawURL, strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
 }
 
 // 获取访问凭据-请求
 func RequestAccessToken(corpid string, secret string) (cache_token AccessTokenCache, ok bool) {
-	url := "https://qyapi.weixin.qq.com/cgi-bin/gettoken"
-	req := httplib.Get(url)
-	req.Param("corpid", corpid)     // 企业ID
-	req.Param("corpsecret", secret) // 应用的凭证密钥
-	req.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: false})
-	req.AddFilters(httpFilter)
-	resp, err := req.Response()
-	_ = resp
+	apiURL := "https://qyapi.weixin.qq.com/cgi-bin/gettoken"
+	data, err := httpGet(apiURL, map[string]string{
+		"corpid":     corpid,
+		"corpsecret": secret,
+	})
 	var token AccessTokenCache
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		return token, false
 	}
 	var atr AccessTokenResponse
-	err = req.ToJSON(&atr)
-	if err != nil {
-		logs.Error(err)
+	if err := json.Unmarshal(data, &atr); err != nil {
+		logger.Error(err)
 		return token, false
 	}
 	token = AccessTokenCache{
@@ -169,76 +199,65 @@ func GetAccessToken() (access_token string, ok bool) {
 	cache_key := AccessTokenCacheKey
 	err := cache.Get(cache_key, &cache_token)
 	if err == nil {
-		logs.Info("AccessToken从缓存读取成功")
+		logger.Info("AccessToken从缓存读取成功")
 		// TODO: access_token有效期判断, 刷新
 		return cache_token.AccessToken, true
 	} else {
-		logs.Warning(err)
+		logger.Warn(err)
 		workweixinConfig := conf.GetWorkWeixinConfig()
-		logs.Debug("corp_id: ", workweixinConfig.CorpId)
-		logs.Debug("agent_id: ", workweixinConfig.AgentId)
-		logs.Debug("secret: ", workweixinConfig.Secret)
+		logger.Debug("corp_id: ", workweixinConfig.CorpId)
+		logger.Debug("agent_id: ", workweixinConfig.AgentId)
+		logger.Debug("secret: ", workweixinConfig.Secret)
 		secret := workweixinConfig.Secret
 		new_token, ok := RequestAccessToken(workweixinConfig.CorpId, secret)
 		if ok {
-			logs.Debug(new_token)
+			logger.Debug(new_token)
 			if err = cache.Put(cache_key, new_token, time.Second*time.Duration(new_token.ExpiresIn)); err == nil {
-				logs.Info("AccessToken缓存写入成功")
+				logger.Info("AccessToken缓存写入成功")
 				return new_token.AccessToken, true
 			}
-			logs.Warning("AccessToken缓存写入失败")
+			logger.Warn("AccessToken缓存写入失败")
 			return "", false
 		}
-		logs.Warning("AccessToken请求失败")
+		logger.Warn("AccessToken请求失败")
 		return "", false
 	}
 }
 
 // 获取用户id-请求
 func RequestUserId(access_token string, code string) (user_id string, ticket string, ok bool) {
-	url := "https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo"
-	req := httplib.Get(url)
-	req.Param("access_token", access_token) // 应用调用接口凭证
-	req.Param("code", code)                 // 通过成员授权获取到的code
-	req.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: false})
-	req.AddFilters(httpFilter)
-	resp, err := req.Response()
-	_ = resp
+	apiURL := "https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo"
+	data, err := httpGet(apiURL, map[string]string{
+		"access_token": access_token,
+		"code":         code,
+	})
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		return "", "", false
 	}
 	var uir UserIdResponse
-	err = req.ToJSON(&uir)
-	if err != nil {
-		logs.Error(err)
+	if err := json.Unmarshal(data, &uir); err != nil {
+		logger.Error(err)
 		return "", "", false
 	}
 	return uir.UserId, uir.UserTicket, uir.UserId != ""
 }
 
 func RequestUserPrivateInfo(access_token, userid, ticket string) (WorkWeixinUserPrivateInfo, error) {
-	url := "https://qyapi.weixin.qq.com/cgi-bin/auth/getuserdetail?access_token=" + access_token
-	req := httplib.Post(url)
-	body := map[string]string{
+	apiURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/auth/getuserdetail?access_token=%s", access_token)
+	body, _ := json.Marshal(map[string]string{
 		"user_ticket": ticket,
-	}
-	b, _ := json.Marshal(body)
-	req.Body(b)
+	})
 
-	req.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: false})
-	req.AddFilters(httpFilter)
-	resp, err := req.Response()
-	_ = resp
+	data, err := httpPost(apiURL, body)
 	var uir UserPrivateInfoResponse
 	var info WorkWeixinUserPrivateInfo
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		return info, err
 	}
-	err = req.ToJSON(&uir)
-	if err != nil {
-		logs.Error(err)
+	if err := json.Unmarshal(data, &uir); err != nil {
+		logger.Error(err)
 		return info, err
 	}
 
@@ -267,29 +286,25 @@ func RequestUserPrivateInfo(access_token, userid, ticket string) (WorkWeixinUser
 
 /*
 获取用户详细信息-请求
-从2022年8月15日10点开始，“企业管理后台 - 管理工具 - 通讯录同步”的新增IP将不能再调用此接口
+从2022年8月15日10点开始，"企业管理后台 - 管理工具 - 通讯录同步"的新增IP将不能再调用此接口
 url:https://developer.work.weixin.qq.com/document/path/96079
 */
 func RequestUserInfo(contact_access_token string, userid string) (user_info WorkWeixinUserInfo, error_msg error, ok bool) {
-	url := "https://qyapi.weixin.qq.com/cgi-bin/user/get"
-	req := httplib.Get(url)
-	req.Param("access_token", contact_access_token) // 通讯录应用调用接口凭证
-	req.Param("userid", userid)                     // 成员UserID
-	req.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: false})
-	req.AddFilters(httpFilter)
-	resp_str, err := req.String()
-	_ = resp_str
+	apiURL := "https://qyapi.weixin.qq.com/cgi-bin/user/get"
+	data, err := httpGet(apiURL, map[string]string{
+		"access_token": contact_access_token,
+		"userid":       userid,
+	})
 	var info WorkWeixinUserInfo
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		return info, err, false
 	} else {
-		logs.Debug(resp_str)
+		logger.Debug(string(data))
 	}
 	var uir UserInfoResponse
-	err = req.ToJSON(&uir)
-	if err != nil {
-		logs.Error(err)
+	if err := json.Unmarshal(data, &uir); err != nil {
+		logger.Error(err)
 		return info, err, false
 	}
 	if uir.ErrCode != 0 {
@@ -316,28 +331,23 @@ func RequestUserInfo(contact_access_token string, userid string) (user_info Work
 获取成员ID列表
 */
 func GetUserListId(contact_access_token string, userid string) (user_info WorkWeixinDeptUserInfo, error_msg string, ok bool) {
-	url := "https://qyapi.weixin.qq.com/cgi-bin/user/list_id"
-	req := httplib.Get(url)
-	req.Param("access_token", contact_access_token) // 通讯录应用调用接口凭证
-	req.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: false})
-	req.AddFilters(httpFilter)
-	respStr, err := req.String()
-	_ = respStr
+	apiURL := "https://qyapi.weixin.qq.com/cgi-bin/user/list_id"
+	data, err := httpGet(apiURL, map[string]string{
+		"access_token": contact_access_token,
+	})
 
 	var info WorkWeixinDeptUserInfo
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		return info, "请求失败", false
 	} else {
-		logs.Debug(respStr)
+		logger.Debug(string(data))
 	}
 
 	// 返回响应
 	var uir UserListIdResponse
-	//获取用户信息失败: 请求数据结果错误
-	err = req.ToJSON(&uir)
-	if err != nil {
-		logs.Error(err)
+	if err := json.Unmarshal(data, &uir); err != nil {
+		logger.Error(err)
 		return info, "请求数据结果错误", false
 	}
 

@@ -14,55 +14,40 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/cache"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/utils"
+	"gorm.io/gorm"
 )
 
 // Document struct.
 type Document struct {
-	DocumentId    int           `orm:"pk;auto;unique;column(document_id)" json:"doc_id"`
-	DocumentName  string        `orm:"column(document_name);size(500);description(文档名称)" json:"doc_name"`
-	Identify      string        `orm:"column(identify);size(100);index;null;default(null);description(唯一标识)" json:"identify"` // Identify 文档唯一标识
-	BookId        int           `orm:"column(book_id);type(int);index;description(关联bools表主键)" json:"book_id"`
-	ParentId      int           `orm:"column(parent_id);type(int);index;default(0);description(父级文档)" json:"parent_id"`
-	OrderSort     int           `orm:"column(order_sort);default(0);type(int);index;description(排序从小到大排序)" json:"order_sort"`
-	Markdown      string        `orm:"column(markdown);type(text);null;description(markdown内容)" json:"markdown"` // Markdown markdown格式文档.
-	MarkdownTheme string        `orm:"column(markdown_theme);size(50);default(theme__light);description(markdown主题)" json:"markdown_theme"`
-	Release       string        `orm:"column(release);type(text);null;description(文章内容)" json:"release"` // Release 发布后的Html格式内容.
-	Content       string        `orm:"column(content);type(text);null;description(文章内容)" json:"content"` // Content 未发布的 Html 格式内容.
-	CreateTime    time.Time     `orm:"column(create_time);type(datetime);auto_now_add;description(创建时间)" json:"create_time"`
-	MemberId      int           `orm:"column(member_id);type(int);description(关系用户id)" json:"member_id"`
-	ModifyTime    time.Time     `orm:"column(modify_time);type(datetime);auto_now;description(修改时间)" json:"modify_time"`
-	ModifyAt      int           `orm:"column(modify_at);type(int);description(修改人id)" json:"-"`
-	Version       int64         `orm:"column(version);type(bigint);description(版本，关联历史文档里的version)" json:"version"`
-	IsOpen        int           `orm:"column(is_open);type(int);default(0);description(是否展开子目录 0：阅读时关闭节点 1：阅读时展开节点 2：空目录 单击时会展开下级节点)" json:"is_open"` //是否展开子目录：0 否/1 是 /2 空间节点，单击时展开下一级
-	ViewCount     int           `orm:"column(view_count);type(int);description(浏览量)" json:"view_count"`
-	AttachList    []*Attachment `orm:"-" json:"attach"`
+	DocumentId    int           `gorm:"primaryKey;autoIncrement;uniqueIndex;column:document_id" json:"doc_id"`
+	DocumentName  string        `gorm:"size:500;column:document_name;comment:文档名称" json:"doc_name"`
+	Identify      string        `gorm:"size:100;index;column:identify;default:null;comment:唯一标识" json:"identify"` // Identify 文档唯一标识
+	BookId        int           `gorm:"type:int;index;column:book_id;comment:关联bools表主键" json:"book_id"`
+	ParentId      int           `gorm:"type:int;index;column:parent_id;default:0;comment:父级文档" json:"parent_id"`
+	OrderSort     int           `gorm:"column:order_sort;default:0;type:int;index;comment:排序从小到大排序" json:"order_sort"`
+	Markdown      string        `gorm:"type:text;column:markdown;comment:markdown内容" json:"markdown"` // Markdown markdown格式文档.
+	MarkdownTheme string        `gorm:"size:50;column:markdown_theme;default:theme__light;comment:markdown主题" json:"markdown_theme"`
+	Release       string        `gorm:"type:text;column:release;comment:文章内容" json:"release"` // Release 发布后的Html格式内容.
+	Content       string        `gorm:"type:text;column:content;comment:文章内容" json:"content"` // Content 未发布的 Html 格式内容.
+	CreateTime    time.Time     `gorm:"type:datetime;autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`
+	MemberId      int           `gorm:"type:int;column:member_id;comment:关系用户id" json:"member_id"`
+	ModifyTime    time.Time     `gorm:"type:datetime;autoUpdateTime;column:modify_time;comment:修改时间" json:"modify_time"`
+	ModifyAt      int           `gorm:"type:int;column:modify_at;comment:修改人id" json:"-"`
+	Version       int64         `gorm:"type:bigint;column:version;comment:版本，关联历史文档里的version" json:"version"`
+	IsOpen        int           `gorm:"type:int;column:is_open;default:0;comment:是否展开子目录 0：阅读时关闭节点 1：阅读时展开节点 2：空目录 单击时会展开下级节点" json:"is_open"` //是否展开子目录：0 否/1 是 /2 空间节点，单击时展开下一级
+	ViewCount     int           `gorm:"type:int;column:view_count;comment:浏览量" json:"view_count"`
+	AttachList    []*Attachment `gorm:"-" json:"attach"`
 	//i18n
-	Lang string `orm:"-"`
-}
-
-// 多字段唯一键
-func (item *Document) TableUnique() [][]string {
-	return [][]string{{"book_id", "identify"}}
+	Lang string `gorm:"-"`
 }
 
 // TableName 获取对应数据库表名.
 func (item *Document) TableName() string {
-	return "documents"
-}
-
-// TableEngine 获取数据使用的引擎.
-func (item *Document) TableEngine() string {
-	return "INNODB"
-}
-
-func (item *Document) TableNameWithPrefix() string {
-	return conf.GetDatabasePrefix() + item.TableName()
+	return conf.GetDatabasePrefix() + "documents"
 }
 
 func NewDocument() *Document {
@@ -77,11 +62,9 @@ func (item *Document) Find(id int) (*Document, error) {
 		return item, ErrInvalidParameter
 	}
 
-	o := orm.NewOrm()
+	err := DB.Table(item.TableName()).Where("document_id = ?", id).First(item).Error
 
-	err := o.QueryTable(item.TableNameWithPrefix()).Filter("document_id", id).One(item)
-
-	if err == orm.ErrNoRows {
+	if err == gorm.ErrRecordNotFound {
 		return item, ErrDataNotExist
 	}
 
@@ -90,16 +73,15 @@ func (item *Document) Find(id int) (*Document, error) {
 
 // 插入和更新文档.
 func (item *Document) InsertOrUpdate(cols ...string) error {
-	o := orm.NewOrm()
 	item.DocumentName = utils.StripTags(item.DocumentName)
 	var err error
 	if item.DocumentId > 0 {
-		_, err = o.Update(item, cols...)
+		err = DB.Save(item).Error
 	} else {
 		if item.Identify == "" {
 			book := NewBook()
 			identify := "docs"
-			if err := o.QueryTable(book.TableNameWithPrefix()).Filter("book_id", item.BookId).One(book, "identify"); err == nil {
+			if err := DB.Table(book.TableName()).Select("identify").Where("book_id = ?", item.BookId).First(book).Error; err == nil {
 				identify = book.Identify
 			}
 
@@ -107,10 +89,11 @@ func (item *Document) InsertOrUpdate(cols ...string) error {
 		}
 
 		if item.OrderSort == 0 {
-			sort, _ := o.QueryTable(item.TableNameWithPrefix()).Filter("book_id", item.BookId).Filter("parent_id", item.ParentId).Count()
+			var sort int64
+			DB.Table(item.TableName()).Where("book_id = ? AND parent_id = ?", item.BookId, item.ParentId).Count(&sort)
 			item.OrderSort = int(sort) + 1
 		}
-		_, err = o.Insert(item)
+		err = DB.Create(item).Error
 		NewBook().ResetDocumentNumber(item.BookId)
 	}
 	if err != nil {
@@ -122,9 +105,8 @@ func (item *Document) InsertOrUpdate(cols ...string) error {
 
 // 根据文档识别编号和项目id获取一篇文档
 func (item *Document) FindByIdentityFirst(identify string, bookId int) (*Document, error) {
-	o := orm.NewOrm()
 
-	err := o.QueryTable(item.TableNameWithPrefix()).Filter("book_id", bookId).Filter("identify", identify).One(item)
+	err := DB.Table(item.TableName()).Where("book_id = ? AND identify = ?", bookId, identify).First(item).Error
 
 	return item, err
 }
@@ -132,34 +114,34 @@ func (item *Document) FindByIdentityFirst(identify string, bookId int) (*Documen
 // 递归删除一个文档.
 func (item *Document) RecursiveDocument(docId int) error {
 
-	o := orm.NewOrm()
-
 	if doc, err := item.Find(docId); err == nil {
 		// 删除文档的倒排索引
 		index := NewContentReverseIndex()
 		_ = index.DeleteByContentTypeAndContentId(1, docId)
 
-		o.Delete(doc)
+		DB.Delete(doc)
 		NewDocumentHistory().Clear(doc.DocumentId)
 	}
-	var maps []orm.Params
 
-	_, err := o.Raw("SELECT document_id FROM " + item.TableNameWithPrefix() + " WHERE parent_id=" + strconv.Itoa(docId)).Values(&maps)
+	type docIdResult struct {
+		DocumentId int
+	}
+	var results []docIdResult
+
+	err := DB.Raw("SELECT document_id FROM " + item.TableName() + " WHERE parent_id=" + strconv.Itoa(docId)).Scan(&results).Error
 	if err != nil {
-		logs.Error("RecursiveDocument => ", err)
+		logger.Error("RecursiveDocument => ", err)
 		return err
 	}
 
-	for _, param := range maps {
-		if docId, ok := param["document_id"].(string); ok {
-			id, _ := strconv.Atoi(docId)
-			// 删除子文档的倒排索引
-			index := NewContentReverseIndex()
-			_ = index.DeleteByContentTypeAndContentId(1, id)
+	for _, r := range results {
+		id := r.DocumentId
+		// 删除子文档的倒排索引
+		index := NewContentReverseIndex()
+		_ = index.DeleteByContentTypeAndContentId(1, id)
 
-			o.QueryTable(item.TableNameWithPrefix()).Filter("document_id", id).Delete()
-			item.RecursiveDocument(id)
-		}
+		DB.Table(item.TableName()).Where("document_id = ?", id).Delete(nil)
+		item.RecursiveDocument(id)
 	}
 
 	return nil
@@ -172,11 +154,11 @@ func (item *Document) PutToCache() {
 		if m.Identify == "" {
 
 			if err := cache.Put("Document.Id."+strconv.Itoa(m.DocumentId), m, time.Second*3600); err != nil {
-				logs.Info("文档缓存失败:", m.DocumentId)
+				logger.Info("文档缓存失败:", m.DocumentId)
 			}
 		} else {
 			if err := cache.Put(fmt.Sprintf("Document.BookId.%d.Identify.%s", m.BookId, m.Identify), m, time.Second*3600); err != nil {
-				logs.Info("文档缓存失败:", m.DocumentId)
+				logger.Info("文档缓存失败:", m.DocumentId)
 			}
 		}
 
@@ -198,7 +180,7 @@ func (item *Document) RemoveCache() {
 func (item *Document) FromCacheById(id int) (*Document, error) {
 
 	if err := cache.Get("Document.Id."+strconv.Itoa(id), &item); err == nil && item.DocumentId > 0 {
-		logs.Info("从缓存中获取文档信息成功 ->", item.DocumentId)
+		logger.Info("从缓存中获取文档信息成功 ->", item.DocumentId)
 		return item, nil
 	}
 
@@ -219,7 +201,7 @@ func (item *Document) FromCacheByIdentify(identify string, bookId int) (*Documen
 	key := fmt.Sprintf("Document.BookId.%d.Identify.%s", bookId, identify)
 
 	if err := cache.Get(key, item); err == nil && item.DocumentId > 0 {
-		logs.Info("从缓存中获取文档信息成功 ->", key)
+		logger.Info("从缓存中获取文档信息成功 ->", key)
 		return item, nil
 	}
 
@@ -233,18 +215,17 @@ func (item *Document) FromCacheByIdentify(identify string, bookId int) (*Documen
 
 // 根据项目ID查询文档列表.
 func (item *Document) FindListByBookId(bookId int) (docs []*Document, err error) {
-	o := orm.NewOrm()
 
-	_, err = o.QueryTable(item.TableNameWithPrefix()).Filter("book_id", bookId).OrderBy("order_sort").All(&docs)
+	err = DB.Table(item.TableName()).Where("book_id = ?", bookId).Order("order_sort").Find(&docs).Error
 
 	return
 }
 
 // 判断文章是否存在
 func (item *Document) IsExist(documentId int) bool {
-	o := orm.NewOrm()
-
-	return o.QueryTable(item.TableNameWithPrefix()).Filter("document_id", documentId).Exist()
+	var count int64
+	DB.Table(item.TableName()).Where("document_id = ?", documentId).Count(&count)
+	return count > 0
 }
 
 // 发布单篇文档
@@ -255,14 +236,14 @@ func (item *Document) ReleaseContent() error {
 	err := item.Processor().InsertOrUpdate("release")
 
 	if err != nil {
-		logs.Error(fmt.Sprintf("发布失败 -> %+v", item), err)
+		logger.Error(fmt.Sprintf("发布失败 -> %+v", item), err)
 		return err
 	}
 	//当文档发布后，需要清除已缓存的转换文档和文档缓存
 	item.RemoveCache()
 
 	if err := os.RemoveAll(filepath.Join(conf.WorkingDirectory, "uploads", "books", strconv.Itoa(item.BookId))); err != nil {
-		logs.Error("删除已缓存的文档目录失败 -> ", filepath.Join(conf.WorkingDirectory, "uploads", "books", strconv.Itoa(item.BookId)))
+		logger.Error("删除已缓存的文档目录失败 -> ", filepath.Join(conf.WorkingDirectory, "uploads", "books", strconv.Itoa(item.BookId)))
 		return err
 	}
 
@@ -275,7 +256,7 @@ func (item *Document) ReleaseContent() error {
 		content = docName + "\n" + content
 		content = utils.StripTags(content)
 		if err := BuildIndexForDocument(docId, content); err != nil {
-			logs.Error("error: 构建文档倒排索引失败 ->", docId, err)
+			logger.Error("error: 构建文档倒排索引失败 ->", docId, err)
 		}
 	}(item.DocumentId, item.DocumentName, item.Release, item.Markdown)
 
@@ -314,7 +295,7 @@ func (item *Document) Processor() *Document {
 				if docQuery == nil {
 					docQuery, err = goquery.NewDocumentFromReader(content)
 					if err != nil {
-						logs.Error("goquery->NewDocumentFromReader err:%+v", err)
+						logger.Error("goquery->NewDocumentFromReader err:%+v", err)
 					}
 				} else {
 					if selector := docQuery.Find("div.wiki-bottom").First(); selector.Size() > 0 {
@@ -363,7 +344,7 @@ func (item *Document) Processor() *Document {
 				selector.AppendHtml(release)
 			}
 		}
-		cdnimg, _ := web.AppConfig.String("cdnimg")
+		cdnimg, _ := conf.GetString("cdnimg")
 
 		docQuery.Find("img").Each(func(i int, selection *goquery.Selection) {
 
@@ -417,8 +398,5 @@ func (item *Document) Processor() *Document {
 
 // 增加阅读次数
 func (item *Document) IncrViewCount(id int) {
-	o := orm.NewOrm()
-	o.QueryTable(item.TableNameWithPrefix()).Filter("document_id", id).Update(orm.Params{
-		"view_count": orm.ColValue(orm.ColAdd, 1),
-	})
+	DB.Table(item.TableName()).Where("document_id = ?", id).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
 }

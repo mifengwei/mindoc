@@ -2,7 +2,8 @@ package models
 
 import (
 	"bytes"
-	"io/ioutil"
+	"html/template"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,9 +15,7 @@ import (
 	"regexp"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/beego/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/converter"
@@ -29,8 +28,20 @@ import (
 )
 
 var (
-	exportLimitWorkerChannel = gopool.NewChannelPool(conf.GetExportLimitNum(), conf.GetExportQueueLimitNum())
+	exportLimitWorkerChannel *gopool.ChannelPool
 )
+
+// InitExportPool 初始化导出线程池，必须在配置加载后调用
+func InitExportPool() {
+	exportLimitWorkerChannel = gopool.NewChannelPool(conf.GetExportLimitNum(), conf.GetExportQueueLimitNum())
+}
+
+func getExportPool() *gopool.ChannelPool {
+	if exportLimitWorkerChannel == nil {
+		InitExportPool()
+	}
+	return exportLimitWorkerChannel
+}
 
 type BookResult struct {
 	BookId         int       `json:"book_id"`
@@ -98,14 +109,13 @@ func (m *BookResult) FindByIdentify(identify string, memberId int) (*BookResult,
 	if identify == "" || memberId <= 0 {
 		return m, ErrInvalidParameter
 	}
-	o := orm.NewOrm()
 
 	var book Book
 
-	err := NewBook().QueryTable().Filter("identify", identify).One(&book)
+	err := DB.Table(NewBook().TableName()).Where("identify = ?", identify).First(&book).Error
 
 	if err != nil {
-		logs.Error("获取项目失败 ->", err)
+		logger.Error("获取项目失败 ->", err)
 		return m, err
 	}
 
@@ -117,10 +127,10 @@ func (m *BookResult) FindByIdentify(identify string, memberId int) (*BookResult,
 	var relationship2 Relationship
 
 	//查找项目创始人
-	err = NewRelationship().QueryTable().Filter("book_id", book.BookId).Filter("role_id", 0).One(&relationship2)
+	err = DB.Table(NewRelationship().TableName()).Where("book_id = ? AND role_id = ?", book.BookId, 0).First(&relationship2).Error
 
 	if err != nil {
-		logs.Error("根据项目标识查询项目以及指定用户权限的信息 -> ", err)
+		logger.Error("根据项目标识查询项目以及指定用户权限的信息 -> ", err)
 		return m, ErrPermissionDenied
 	}
 
@@ -150,7 +160,7 @@ func (m *BookResult) FindByIdentify(identify string, memberId int) (*BookResult,
 
 	doc := NewDocument()
 
-	err = o.QueryTable(doc.TableNameWithPrefix()).Filter("book_id", book.BookId).OrderBy("modify_time").One(doc)
+	err = DB.Table(NewDocument().TableName()).Where("book_id = ?", book.BookId).Order("modify_time").First(doc).Error
 
 	if err == nil {
 		member2 := NewMember()
@@ -163,9 +173,8 @@ func (m *BookResult) FindByIdentify(identify string, memberId int) (*BookResult,
 }
 
 func (m *BookResult) FindToPager(pageIndex, pageSize int) (books []*BookResult, totalCount int, err error) {
-	o := orm.NewOrm()
-
-	count, err := o.QueryTable(NewBook().TableNameWithPrefix()).Count()
+	var count int64
+	err = DB.Table(NewBook().TableName()).Count(&count).Error
 
 	if err != nil {
 		return
@@ -181,7 +190,7 @@ func (m *BookResult) FindToPager(pageIndex, pageSize int) (books []*BookResult, 
 
 	offset := (pageIndex - 1) * pageSize
 
-	_, err = o.Raw(sql, pageSize, offset).QueryRows(&books)
+	err = DB.Raw(sql, pageSize, offset).Scan(&books).Error
 
 	return
 }
@@ -227,9 +236,7 @@ func (m *BookResult) ToBookResult(book Book) *BookResult {
 
 	doc := NewDocument()
 
-	o := orm.NewOrm()
-
-	err := o.QueryTable(doc.TableNameWithPrefix()).Filter("book_id", book.BookId).OrderBy("modify_time").One(doc)
+	err := DB.Table(NewDocument().TableName()).Where("book_id = ?", book.BookId).Order("modify_time").First(doc).Error
 
 	if err == nil {
 		member2 := NewMember()
@@ -262,19 +269,19 @@ func (m *BookResult) ToBookResult(book Book) *BookResult {
 func BackgroundConvert(sessionId string, bookResult *BookResult) error {
 
 	if err := converter.CheckConvertCommand(); err != nil {
-		logs.Error("检查转换程序失败 -> ", err)
+		logger.Error("检查转换程序失败 -> ", err)
 		return err
 	}
-	err := exportLimitWorkerChannel.LoadOrStore(bookResult.Identify, func() {
+	err := getExportPool().LoadOrStore(bookResult.Identify, func() {
 		bookResult.Converter(sessionId)
 	})
 
 	if err != nil {
 
-		logs.Error("将导出任务加入任务队列失败 -> ", err)
+		logger.Error("将导出任务加入任务队列失败 -> ", err)
 		return err
 	}
-	exportLimitWorkerChannel.Start()
+	getExportPool().Start()
 	return nil
 }
 
@@ -284,7 +291,7 @@ func (m *BookResult) Converter(sessionId string) (ConvertBookResult, error) {
 	convertBookResult := ConvertBookResult{}
 
 	outputPath := filepath.Join(conf.GetExportOutputPath(), strconv.Itoa(m.BookId))
-	viewPath := web.BConfig.WebConfig.ViewsPath
+	viewPath := conf.WorkingDir("views")
 
 	pdfpath := filepath.Join(outputPath, "book.pdf")
 	epubpath := filepath.Join(outputPath, "book.epub")
@@ -297,15 +304,15 @@ func (m *BookResult) Converter(sessionId string) (ConvertBookResult, error) {
 	sourceDir := strings.TrimSuffix(tempOutputPath, "source")
 	if filetil.FileExists(sourceDir) {
 		if err := os.RemoveAll(sourceDir); err != nil {
-			logs.Error("删除临时目录失败 ->", sourceDir, err)
+			logger.Error("删除临时目录失败 ->", sourceDir, err)
 		}
 	}
 
 	if err := os.MkdirAll(outputPath, 0766); err != nil {
-		logs.Error("创建目录失败 -> ", outputPath, err)
+		logger.Error("创建目录失败 -> ", outputPath, err)
 	}
 	if err := os.MkdirAll(tempOutputPath, 0766); err != nil {
-		logs.Error("创建目录失败 -> ", tempOutputPath, err)
+		logger.Error("创建目录失败 -> ", tempOutputPath, err)
 	}
 	os.MkdirAll(filepath.Join(tempOutputPath, "Images"), 0755)
 
@@ -376,8 +383,8 @@ func (m *BookResult) Converter(sessionId string) (ConvertBookResult, error) {
 
 	if m.Publisher != "" {
 		ebookConfig.Footer = "<p style='color:#8E8E8E;font-size:12px;'>本文档由 <span style='text-decoration:none;color:#1abc9c;font-weight:bold;'>" + m.Publisher + "</span> 生成<span style='float:right'>- _PAGENUM_ -</span></p>"
-	} else if web.AppConfig.DefaultString("publisher_def", "") != "" {
-		defPub := web.AppConfig.DefaultString("publisher_def", "")
+	} else if conf.GetDefaultString("publisher_def", "") != "" {
+		defPub := conf.GetDefaultString("publisher_def", "")
 		ebookConfig.Footer = "<p style='color:#8E8E8E;font-size:12px;'>本文档由 <span style='text-decoration:none;color:#1abc9c;font-weight:bold;'>" + defPub + "</span> 生成<span style='float:right'>- _PAGENUM_ -</span></p>"
 	}
 	if m.RealName != "" {
@@ -385,7 +392,7 @@ func (m *BookResult) Converter(sessionId string) (ConvertBookResult, error) {
 	}
 
 	if tempOutputPath, err = filepath.Abs(tempOutputPath); err != nil {
-		logs.Error("导出目录配置错误：" + err.Error())
+		logger.Error("导出目录配置错误：" + err.Error())
 		return convertBookResult, err
 	}
 
@@ -399,7 +406,7 @@ func (m *BookResult) Converter(sessionId string) (ConvertBookResult, error) {
 		}
 		var buf bytes.Buffer
 
-		if err := web.ExecuteViewPathTemplate(&buf, "document/export.tpl", viewPath, map[string]interface{}{"Model": m, "Lists": item, "BaseUrl": conf.BaseUrl}); err != nil {
+		if err := executeExportTemplate(&buf, filepath.Join(viewPath, "document", "export.tpl"), map[string]interface{}{"Model": m, "Lists": item, "BaseUrl": conf.BaseUrl}); err != nil {
 			return convertBookResult, err
 		}
 		html := buf.String()
@@ -422,7 +429,7 @@ func (m *BookResult) Converter(sessionId string) (ConvertBookResult, error) {
 				if strings.HasPrefix(src, "/") {
 					spath := filepath.Join(conf.WorkingDirectory, src)
 					if filetil.CopyFile(spath, filepath.Join(tempOutputPath, dstSrcString)); err != nil {
-						logs.Error("复制图片失败 -> ", err, src)
+						logger.Error("复制图片失败 -> ", err, src)
 						return
 					}
 
@@ -438,18 +445,18 @@ func (m *BookResult) Converter(sessionId string) (ConvertBookResult, error) {
 
 							defer resp.Body.Close()
 
-							if body, err := ioutil.ReadAll(resp.Body); err == nil {
+							if body, err := io.ReadAll(resp.Body); err == nil {
 								//encodeString = base64.StdEncoding.EncodeToString(body)
-								if err := ioutil.WriteFile(filepath.Join(tempOutputPath, dstSrcString), body, 0755); err != nil {
-									logs.Error("下载图片失败 -> ", err, src)
+								if err := os.WriteFile(filepath.Join(tempOutputPath, dstSrcString), body, 0755); err != nil {
+									logger.Error("下载图片失败 -> ", err, src)
 									return
 								}
 							} else {
-								logs.Error("下载图片失败 -> ", err, src)
+								logger.Error("下载图片失败 -> ", err, src)
 								return
 							}
 						} else {
-							logs.Error("下载图片失败 -> ", err, src)
+							logger.Error("下载图片失败 -> ", err, src)
 							return
 						}
 					}
@@ -472,24 +479,24 @@ func (m *BookResult) Converter(sessionId string) (ConvertBookResult, error) {
 	}
 
 	if err := filetil.CopyFile(filepath.Join(conf.WorkingDirectory, "static", "css", "kancloud.css"), filepath.Join(tempOutputPath, "styles", "css", "kancloud.css")); err != nil {
-		logs.Error("复制CSS样式出错 -> static/css/kancloud.css", err)
+		logger.Error("复制CSS样式出错 -> static/css/kancloud.css", err)
 	}
 	if err := filetil.CopyFile(filepath.Join(conf.WorkingDirectory, "static", "css", "export.css"), filepath.Join(tempOutputPath, "styles", "css", "export.css")); err != nil {
-		logs.Error("复制CSS样式出错 -> static/css/export.css", err)
+		logger.Error("复制CSS样式出错 -> static/css/export.css", err)
 	}
 	if err := filetil.CopyFile(filepath.Join(conf.WorkingDirectory, "static", "editor.md", "css", "editormd.preview.css"), filepath.Join(tempOutputPath, "styles", "editor.md", "css", "editormd.preview.css")); err != nil {
-		logs.Error("复制CSS样式出错 -> static/editor.md/css/editormd.preview.css", err)
+		logger.Error("复制CSS样式出错 -> static/editor.md/css/editormd.preview.css", err)
 	}
 
 	if err := filetil.CopyFile(filepath.Join(conf.WorkingDirectory, "static", "css", "markdown.preview.css"), filepath.Join(tempOutputPath, "styles", "css", "markdown.preview.css")); err != nil {
-		logs.Error("复制CSS样式出错 -> static/css/markdown.preview.css", err)
+		logger.Error("复制CSS样式出错 -> static/css/markdown.preview.css", err)
 	}
 	if err := filetil.CopyFile(filepath.Join(conf.WorkingDirectory, "static", "editor.md", "lib", "highlight", "styles", "github.css"), filepath.Join(tempOutputPath, "styles", "css", "github.css")); err != nil {
-		logs.Error("复制CSS样式出错 -> static/editor.md/lib/highlight/styles/github.css", err)
+		logger.Error("复制CSS样式出错 -> static/editor.md/lib/highlight/styles/github.css", err)
 	}
 
 	if err := filetil.CopyDir(filepath.Join(conf.WorkingDirectory, "static", "font-awesome"), filepath.Join(tempOutputPath, "styles", "font-awesome")); err != nil {
-		logs.Error("复制CSS样式出错 -> static/font-awesome", err)
+		logger.Error("复制CSS样式出错 -> static/font-awesome", err)
 	}
 
 	eBookConverter := &converter.Converter{
@@ -503,22 +510,22 @@ func (m *BookResult) Converter(sessionId string) (ConvertBookResult, error) {
 	os.MkdirAll(eBookConverter.OutputPath, 0766)
 
 	if err := eBookConverter.Convert(); err != nil {
-		logs.Error("转换文件错误：" + m.BookName + " -> " + err.Error())
+		logger.Error("转换文件错误：" + m.BookName + " -> " + err.Error())
 		return convertBookResult, err
 	}
-	logs.Info("文档转换完成：" + m.BookName)
+	logger.Info("文档转换完成：" + m.BookName)
 
 	if err := filetil.CopyFile(filepath.Join(eBookConverter.OutputPath, "output", "book.mobi"), mobipath); err != nil {
-		logs.Error("复制文档失败 -> ", filepath.Join(eBookConverter.OutputPath, "output", "book.mobi"), err)
+		logger.Error("复制文档失败 -> ", filepath.Join(eBookConverter.OutputPath, "output", "book.mobi"), err)
 	}
 	if err := filetil.CopyFile(filepath.Join(eBookConverter.OutputPath, "output", "book.pdf"), pdfpath); err != nil {
-		logs.Error("复制文档失败 -> ", filepath.Join(eBookConverter.OutputPath, "output", "book.pdf"), err)
+		logger.Error("复制文档失败 -> ", filepath.Join(eBookConverter.OutputPath, "output", "book.pdf"), err)
 	}
 	if err := filetil.CopyFile(filepath.Join(eBookConverter.OutputPath, "output", "book.epub"), epubpath); err != nil {
-		logs.Error("复制文档失败 -> ", filepath.Join(eBookConverter.OutputPath, "output", "book.epub"), err)
+		logger.Error("复制文档失败 -> ", filepath.Join(eBookConverter.OutputPath, "output", "book.epub"), err)
 	}
 	if err := filetil.CopyFile(filepath.Join(eBookConverter.OutputPath, "output", "book.docx"), docxpath); err != nil {
-		logs.Error("复制文档失败 -> ", filepath.Join(eBookConverter.OutputPath, "output", "book.docx"), err)
+		logger.Error("复制文档失败 -> ", filepath.Join(eBookConverter.OutputPath, "output", "book.docx"), err)
 	}
 
 	convertBookResult.MobiPath = mobipath
@@ -548,7 +555,7 @@ func (m *BookResult) ExportMarkdown(sessionId string) (string, error) {
 	}
 
 	if err := ziptil.Compress(outputPath, tempOutputPath); err != nil {
-		logs.Error("导出Markdown失败->", err)
+		logger.Error("导出Markdown失败->", err)
 		return "", err
 	}
 	return outputPath, nil
@@ -556,22 +563,21 @@ func (m *BookResult) ExportMarkdown(sessionId string) (string, error) {
 
 // 递归导出Markdown文档
 func exportMarkdown(p string, parentId int, bookId int, baseDir string, bookUrl string) error {
-	o := orm.NewOrm()
-
 	var docs []*Document
 
-	_, err := o.QueryTable(NewDocument().TableNameWithPrefix()).Filter("book_id", bookId).Filter("parent_id", parentId).All(&docs)
+	err := DB.Table(NewDocument().TableName()).Where("book_id = ? AND parent_id = ?", bookId, parentId).Find(&docs).Error
 
 	if err != nil {
-		logs.Error("导出Markdown失败->", err)
+		logger.Error("导出Markdown失败->", err)
 		return err
 	}
 	for _, doc := range docs {
 		//获取当前文档的子文档数量，如果数量不为0，则将当前文档命名为READMD.md并设置成目录。
-		subDocCount, err := o.QueryTable(NewDocument().TableNameWithPrefix()).Filter("parent_id", doc.DocumentId).Count()
+		var subDocCount int64
+		err := DB.Table(NewDocument().TableName()).Where("parent_id = ?", doc.DocumentId).Count(&subDocCount).Error
 
 		if err != nil {
-			logs.Error("导出Markdown失败->", err)
+			logger.Error("导出Markdown失败->", err)
 			return err
 		}
 
@@ -644,15 +650,15 @@ func exportMarkdown(p string, parentId int, bookId int, baseDir string, bookUrl 
 						docIdentify := strings.TrimSpace(strings.TrimPrefix(originalLink, bookUrl))
 						tempDoc := NewDocument()
 						if id, err := strconv.Atoi(docIdentify); err == nil && id > 0 {
-							err := o.QueryTable(NewDocument().TableNameWithPrefix()).Filter("document_id", id).One(tempDoc, "identify", "parent_id", "document_id")
+							err := DB.Table(NewDocument().TableName()).Where("document_id = ?", id).Select("identify, parent_id, document_id").First(tempDoc).Error
 							if err != nil {
-								logs.Error(err)
+								logger.Error(err)
 								return link
 							}
 						} else {
-							err := o.QueryTable(NewDocument().TableNameWithPrefix()).Filter("identify", docIdentify).One(tempDoc, "identify", "parent_id", "document_id")
+							err := DB.Table(NewDocument().TableName()).Where("identify = ?", docIdentify).Select("identify, parent_id, document_id").First(tempDoc).Error
 							if err != nil {
-								logs.Error(err)
+								logger.Error(err)
 								return link
 							}
 						}
@@ -667,7 +673,7 @@ func exportMarkdown(p string, parentId int, bookId int, baseDir string, bookUrl 
 							relative = strings.TrimSuffix(strings.TrimPrefix(relative, "/"), "/")
 							repeat = strings.Count(relative, "/") + 1
 						}
-						logs.Info(repeat, "|", relative, "|", p, "|", baseDir)
+						logger.Info(repeat, "|", relative, "|", p, "|", baseDir)
 						tempLink = strings.Repeat("../", repeat) + tempLink
 
 						link = strings.TrimSuffix(link, originalLink+")") + tempLink + ")"
@@ -680,8 +686,8 @@ func exportMarkdown(p string, parentId int, bookId int, baseDir string, bookUrl 
 		} else {
 			markdown = "# " + doc.DocumentName + "\n"
 		}
-		if err := ioutil.WriteFile(docPath, []byte(markdown), 0644); err != nil {
-			logs.Error("导出Markdown失败->", err)
+		if err := os.WriteFile(docPath, []byte(markdown), 0644); err != nil {
+			logger.Error("导出Markdown失败->", err)
 			return err
 		}
 
@@ -695,14 +701,12 @@ func exportMarkdown(p string, parentId int, bookId int, baseDir string, bookUrl 
 }
 
 func recursiveJoinDocumentIdentify(parentDocId int, identify string) string {
-	o := orm.NewOrm()
-
 	doc := NewDocument()
 
-	err := o.QueryTable(NewDocument().TableNameWithPrefix()).Filter("document_id", parentDocId).One(doc, "identify", "parent_id", "document_id")
+	err := DB.Table(NewDocument().TableName()).Where("document_id = ?", parentDocId).Select("identify, parent_id, document_id").First(doc).Error
 
 	if err != nil {
-		logs.Error(err)
+		logger.Error(err)
 		return identify
 	}
 
@@ -720,11 +724,20 @@ func recursiveJoinDocumentIdentify(parentDocId int, identify string) string {
 // 查询项目的第一篇文档
 func (m *BookResult) FindFirstDocumentByBookId(bookId int) (*Document, error) {
 
-	o := orm.NewOrm()
-
 	doc := NewDocument()
 
-	err := o.QueryTable(doc.TableNameWithPrefix()).Filter("book_id", bookId).Filter("parent_id", 0).OrderBy("order_sort").One(doc)
+	err := DB.Table(NewDocument().TableName()).Where("book_id = ? AND parent_id = ?", bookId, 0).Order("order_sort").First(doc).Error
 
 	return doc, err
+}
+
+// executeExportTemplate 执行导出模板
+func executeExportTemplate(buf *bytes.Buffer, tplPath string, data map[string]interface{}) error {
+	tmpl, err := template.New("export.tpl").Funcs(template.FuncMap{
+		"i18n": i18n.Tr,
+	}).ParseFiles(tplPath)
+	if err != nil {
+		return err
+	}
+	return tmpl.ExecuteTemplate(buf, "export.tpl", data)
 }

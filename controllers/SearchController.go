@@ -6,8 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/beego/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
@@ -180,11 +179,11 @@ func buildSearchResults(results []*models.ContentReverseIndexResult, words []str
 	}
 
 	// 批量加载 Document 和 Blog
-	docMap, err := batchLoadByIds(models.NewDocument().TableNameWithPrefix(), "document_id__in", docIds, func(d *models.Document) int { return d.DocumentId })
+	docMap, err := batchLoadByIds(models.NewDocument().TableName(), "document_id__in", docIds, func(d *models.Document) int { return d.DocumentId })
 	if err != nil {
 		return nil, err
 	}
-	blogMap, err := batchLoadByIds(models.NewBlog().TableNameWithPrefix(), "blog_id__in", blogIds, func(b *models.Blog) int { return b.BlogId })
+	blogMap, err := batchLoadByIds(models.NewBlog().TableName(), "blog_id__in", blogIds, func(b *models.Blog) int { return b.BlogId })
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +215,7 @@ func buildSearchResults(results []*models.ContentReverseIndexResult, words []str
 	}
 	filterInaccessibleBooks(bookMap, memberId)
 
-	memberMap, err := batchLoadByIds(models.NewMember().TableNameWithPrefix(), "member_id__in", memberIds, func(m *models.Member) int { return m.MemberId }, "member_id", "account", "real_name")
+	memberMap, err := batchLoadByIds(models.NewMember().TableName(), "member_id__in", memberIds, func(m *models.Member) int { return m.MemberId }, "member_id", "account", "real_name")
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +466,7 @@ func (c *SearchController) Index() {
 		searchResult, totalCount, err := models.NewDocumentSearchResult().FindToPager(sqltil.EscapeLike(keyword), pageIndex, conf.PageSize, memberId)
 
 		if err != nil {
-			logs.Error("搜索失败 ->", err)
+			logger.Error("搜索失败 ->", err)
 			return
 		}
 		if totalCount > 0 {
@@ -528,7 +527,7 @@ func (c *SearchController) User() {
 	//members, err := models.NewMemberRelationshipResult().FindNotJoinUsersByAccount(book.BookId, 10, "%"+keyword+"%")
 	members, err := models.NewMemberRelationshipResult().FindNotJoinUsersByAccountOrRealName(book.BookId, 10, "%"+keyword+"%")
 	if err != nil {
-		logs.Error("查询用户列表出错：" + err.Error())
+		logger.Error("查询用户列表出错：" + err.Error())
 		c.JsonResult(500, err.Error())
 	}
 	result := models.SelectMemberResult{}
@@ -569,7 +568,7 @@ func (c *SearchController) IndexV2() {
 		searchResult, totalCount, err := c.performSearchV2(keyword, pageIndex, pageSize)
 
 		if err != nil {
-			logs.Error("搜索失败 ->", err)
+			logger.Error("搜索失败 ->", err)
 			return
 		}
 		if totalCount > 0 {
@@ -616,7 +615,7 @@ func (c *SearchController) SearchV2() {
 	// 使用底层搜索函数
 	rawResults, words, totalCount, err := PerformSearchV2Raw(keyword, pageIndex, pageSize, memberId)
 	if err != nil {
-		logs.Error("倒排索引搜索失败 ->", err)
+		logger.Error("倒排索引搜索失败 ->", err)
 		c.JsonResult(500, "搜索失败")
 		return
 	}
@@ -699,15 +698,12 @@ func batchLoadByIds[T any](tableName, filterField string, ids []int, getKey func
 			end = len(ids)
 		}
 		var items []*T
-		o := orm.NewOrm()
-		var err error
-		qs := o.QueryTable(tableName).Filter(filterField, ids[i:end])
+		field := strings.TrimSuffix(filterField, "__in")
+			db := models.GetDB().Table(tableName).Where(field+" IN ?", ids[i:end])
 		if len(fields) > 0 {
-			_, err = qs.All(&items, fields...)
-		} else {
-			_, err = qs.All(&items)
+			db = db.Select(fields)
 		}
-		if err != nil {
+		if err := db.Find(&items).Error; err != nil {
 			return result, fmt.Errorf("批量加载 %s 失败: %w", tableName, err)
 		}
 		for _, item := range items {

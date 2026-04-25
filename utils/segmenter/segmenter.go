@@ -9,7 +9,7 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/beego/beego/v2/core/logs"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/yanyiwu/gojieba"
 )
@@ -74,13 +74,13 @@ func initJieba() {
 		stopWordsDict := filepath.Join(dictDir, "stop_words.utf8")
 		// 确保词典目录存在
 		if err := ensureDictDir(); err != nil {
-			logs.Error("创建词典目录失败 ->", err)
+			logger.Error("创建词典目录失败 ->", err)
 		}
 		// 创建分词器
 		jiebaCut = gojieba.NewJieba(jiebaDict, hmmDict, userDict, idfDict, stopWordsDict)
 		// 加载停用词表
 		stopWords = loadStopWords(stopWordsDict)
-		logs.Info("jieba分词器初始化完成, 停用词数:", len(stopWords))
+		logger.Info("jieba分词器初始化完成, 停用词数:", len(stopWords))
 	})
 }
 
@@ -89,7 +89,7 @@ func loadStopWords(filePath string) map[string]bool {
 	sw := make(map[string]bool)
 	f, err := os.Open(filePath)
 	if err != nil {
-		logs.Error("加载停用词表失败 ->", err)
+		logger.Error("加载停用词表失败 ->", err)
 		return sw
 	}
 	defer f.Close()

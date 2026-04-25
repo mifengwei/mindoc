@@ -2,44 +2,28 @@ package models
 
 import (
 	"errors"
+	"strings"
 	"time"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
 	"github.com/mindoc-org/mindoc/conf"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 )
 
 type TeamRelationship struct {
-	TeamRelationshipId int       `orm:"column(team_relationship_id);pk;auto;unique;" json:"team_relationship_id"`
-	BookId             int       `orm:"column(book_id);description(项目id)" json:"book_id"`
-	TeamId             int       `orm:"column(team_id);description(团队id)" json:"team_id"`
-	CreateTime         time.Time `orm:"column(create_time);type(datetime);auto_now_add;description(创建时间)" json:"create_time"`
-	TeamName           string    `orm:"-" json:"team_name"`
-	MemberCount        int       `orm:"-" json:"member_count"`
-	BookMemberId       int       `orm:"-" json:"book_member_id"`
-	BookMemberName     string    `orm:"-" json:"book_member_name"`
-	BookName           string    `orm:"-" json:"book_name"`
+	TeamRelationshipId int       `gorm:"primaryKey;autoIncrement;column:team_relationship_id;uniqueIndex" json:"team_relationship_id"`
+	BookId             int       `gorm:"column:book_id;comment:项目id" json:"book_id"`
+	TeamId             int       `gorm:"column:team_id;comment:团队id" json:"team_id"`
+	CreateTime         time.Time `gorm:"type:datetime;autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`
+	TeamName           string    `gorm:"-" json:"team_name"`
+	MemberCount        int       `gorm:"-" json:"member_count"`
+	BookMemberId       int       `gorm:"-" json:"book_member_id"`
+	BookMemberName     string    `gorm:"-" json:"book_member_name"`
+	BookName           string    `gorm:"-" json:"book_name"`
 }
 
 // TableName 获取对应数据库表名.
 func (m *TeamRelationship) TableName() string {
-	return "team_relationship"
-}
-func (m *TeamRelationship) TableNameWithPrefix() string {
-	return conf.GetDatabasePrefix() + m.TableName()
-}
-
-// TableEngine 获取数据使用的引擎.
-func (m *TeamRelationship) TableEngine() string {
-	return "INNODB"
-}
-
-// 联合唯一键
-func (m *TeamRelationship) TableUnique() [][]string {
-	return [][]string{{"team_id", "book_id"}}
-}
-func (m *TeamRelationship) QueryTable() orm.QuerySeter {
-	return orm.NewOrm().QueryTable(m.TableNameWithPrefix())
+	return conf.GetDatabasePrefix() + "team_relationship"
 }
 
 func NewTeamRelationship() *TeamRelationship {
@@ -50,9 +34,13 @@ func (m *TeamRelationship) First(teamId int, cols ...string) (*TeamRelationship,
 	if teamId <= 0 {
 		return nil, ErrInvalidParameter
 	}
-	err := m.QueryTable().Filter("team_id", teamId).One(m, cols...)
+	query := DB.Table(m.TableName()).Where("team_id = ?", teamId)
+	if len(cols) > 0 {
+		query = query.Select(strings.Join(cols, ","))
+	}
+	err := query.First(m).Error
 	if err != nil {
-		logs.Error("查询项目团队失败 ->", err)
+		logger.Error("查询项目团队失败 ->", err)
 	}
 	return m, err
 }
@@ -62,18 +50,18 @@ func (m *TeamRelationship) FindByBookId(bookId int, teamId int) (*TeamRelationsh
 	if teamId <= 0 || bookId <= 0 {
 		return nil, ErrInvalidParameter
 	}
-	err := m.QueryTable().Filter("team_id", teamId).Filter("book_id", bookId).One(m)
+	err := DB.Table(m.TableName()).Where("team_id = ? AND book_id = ?", teamId, bookId).First(m).Error
 	if err != nil {
-		logs.Error("查询项目团队失败 ->", err)
+		logger.Error("查询项目团队失败 ->", err)
 	}
 	return m, err
 }
 
 //删除指定项目的指定团队.
 func (m *TeamRelationship) DeleteByBookId(bookId int, teamId int) error {
-	err := m.QueryTable().Filter("team_id", teamId).Filter("book_id", bookId).One(m)
+	err := DB.Table(m.TableName()).Where("team_id = ? AND book_id = ?", teamId, bookId).First(m).Error
 	if err != nil {
-		logs.Error("查询项目团队失败 ->", err)
+		logger.Error("查询项目团队失败 ->", err)
 		return err
 	}
 	m.Include()
@@ -85,17 +73,24 @@ func (m *TeamRelationship) Save(cols ...string) (err error) {
 	if m.TeamId <= 0 || m.BookId <= 0 {
 		return ErrInvalidParameter
 	}
-	if (m.TeamRelationshipId > 0 && m.QueryTable().Filter("book_id", m.BookId).Filter("team_id", m.TeamId).Filter("team_relationship_id__ne", m.TeamRelationshipId).Exist()) ||
-		m.TeamRelationshipId <= 0 && m.QueryTable().Filter("book_id", m.BookId).Filter("team_id", m.TeamId).Exist() {
+
+	var count int64
+	if m.TeamRelationshipId > 0 {
+		DB.Table(m.TableName()).Where("book_id = ? AND team_id = ? AND team_relationship_id != ?", m.BookId, m.TeamId, m.TeamRelationshipId).Count(&count)
+	} else {
+		DB.Table(m.TableName()).Where("book_id = ? AND team_id = ?", m.BookId, m.TeamId).Count(&count)
+	}
+	if count > 0 {
 		return errors.New("当前团队已加入该项目")
 	}
+
 	if m.TeamRelationshipId > 0 {
-		_, err = orm.NewOrm().Update(m)
+		err = DB.Save(m).Error
 	} else {
-		_, err = orm.NewOrm().Insert(m)
+		err = DB.Create(m).Error
 	}
 	if err != nil {
-		logs.Error("保存团队项目时出错 ->", err)
+		logger.Error("保存团队项目时出错 ->", err)
 	}
 	return
 }
@@ -104,10 +99,10 @@ func (m *TeamRelationship) Delete(teamRelId int) (err error) {
 	if teamRelId <= 0 {
 		return ErrInvalidParameter
 	}
-	_, err = m.QueryTable().Filter("team_relationship_id", teamRelId).Delete()
+	err = DB.Table(m.TableName()).Where("team_relationship_id = ?", teamRelId).Delete(nil).Error
 
 	if err != nil {
-		logs.Error("删除团队项目失败 ->", err)
+		logger.Error("删除团队项目失败 ->", err)
 	}
 	return
 }
@@ -120,18 +115,15 @@ func (m *TeamRelationship) FindToPager(teamId, pageIndex, pageSize int) (list []
 	}
 	offset := (pageIndex - 1) * pageSize
 
-	o := orm.NewOrm()
-
-	_, err = o.QueryTable(m.TableNameWithPrefix()).Filter("team_id", teamId).OrderBy("-team_relationship_id").Offset(offset).Limit(pageSize).All(&list)
+	err = DB.Table(m.TableName()).Where("team_id = ?", teamId).Order("team_relationship_id desc").Offset(offset).Limit(pageSize).Find(&list).Error
 
 	if err != nil {
-		logs.Error("查询团队项目时出错 ->", err)
+		logger.Error("查询团队项目时出错 ->", err)
 		return
 	}
-	count, err := m.QueryTable().Filter("team_id", teamId).Count()
-
-	if err != nil {
-		logs.Error("查询团队项目时出错 ->", err)
+	var count int64
+	if err = DB.Table(m.TableName()).Where("team_id = ?", teamId).Count(&count).Error; err != nil {
+		logger.Error("查询团队项目时出错 ->", err)
 		return
 	}
 	totalCount = int(count)
@@ -177,7 +169,6 @@ func (m *TeamRelationship) FindNotJoinBookByName(teamId int, bookName string, li
 	if teamId <= 0 {
 		return nil, ErrInvalidParameter
 	}
-	o := orm.NewOrm()
 
 	sql := `select book.book_id,book.book_name
 from  md_books as book
@@ -186,10 +177,10 @@ and book.book_name like ? order by book_id desc limit ?;`
 
 	books := make([]*Book, 0)
 
-	_, err := o.Raw(sql, teamId, "%"+bookName+"%", limit).QueryRows(&books)
+	err := DB.Raw(sql, teamId, "%"+bookName+"%", limit).Scan(&books).Error
 
 	if err != nil {
-		logs.Error("查询团队项目时出错 ->", err)
+		logger.Error("查询团队项目时出错 ->", err)
 		return nil, err
 	}
 
@@ -213,18 +204,17 @@ func (m *TeamRelationship) FindNotJoinBookByBookIdentify(bookId int, teamName st
 		return nil, ErrInvalidParameter
 	}
 
-	o := orm.NewOrm()
 	sql := `select *
 from md_teams as team
-where team.team_id not in (select rel.team_id from md_team_relationship as rel where rel.book_id = ?) 
-and team.team_name like ? 
+where team.team_id not in (select rel.team_id from md_team_relationship as rel where rel.book_id = ?)
+and team.team_name like ?
 order by team.team_id desc limit ?;`
 	teams := make([]*Team, 0)
 
-	_, err := o.Raw(sql, bookId, "%"+teamName+"%", limit).QueryRows(&teams)
+	err := DB.Raw(sql, bookId, "%"+teamName+"%", limit).Scan(&teams).Error
 
 	if err != nil {
-		logs.Error("查询团队项目时出错 ->", err)
+		logger.Error("查询团队项目时出错 ->", err)
 		return nil, err
 	}
 
@@ -252,18 +242,15 @@ func (m *TeamRelationship) FindByBookToPager(bookId, pageIndex, pageSize int) (l
 
 	offset := (pageIndex - 1) * pageSize
 
-	o := orm.NewOrm()
-
-	_, err = o.QueryTable(m.TableNameWithPrefix()).Filter("book_id", bookId).OrderBy("-team_relationship_id").Offset(offset).Limit(pageSize).All(&list)
+	err = DB.Table(m.TableName()).Where("book_id = ?", bookId).Order("team_relationship_id desc").Offset(offset).Limit(pageSize).Find(&list).Error
 
 	if err != nil {
-		logs.Error("查询团队项目时出错 ->", err)
+		logger.Error("查询团队项目时出错 ->", err)
 		return
 	}
-	count, err := m.QueryTable().Filter("book_id", bookId).Count()
-
-	if err != nil {
-		logs.Error("查询团队项目时出错 ->", err)
+	var count int64
+	if err = DB.Table(m.TableName()).Where("book_id = ?", bookId).Count(&count).Error; err != nil {
+		logger.Error("查询团队项目时出错 ->", err)
 		return
 	}
 	totalCount = int(count)

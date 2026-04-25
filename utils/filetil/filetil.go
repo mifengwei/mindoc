@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -274,7 +273,7 @@ func IsVideoExt(filename string) bool {
 // 忽略字符串中的BOM头
 func ReadFileAndIgnoreUTF8BOM(filename string) ([]byte, error) {
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}

@@ -11,7 +11,6 @@ import (
 	_ "flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -179,7 +178,7 @@ func (zf *file) extract(rel *Relationship, w io.Writer) error {
 			fmt.Fprintf(w, "![](data:image/png;base64,%s)",
 				base64.StdEncoding.EncodeToString(b[:n]))
 		} else {
-			err = ioutil.WriteFile(
+			err = os.WriteFile(
 				filepath.Join("uploads",
 					strings.TrimSuffix(zf.name, ".docx"),
 					rel.Target),
@@ -474,7 +473,7 @@ func readFile(f *zip.File) (*Node, error) {
 	rc, err := f.Open()
 	defer rc.Close()
 
-	b, _ := ioutil.ReadAll(rc)
+	b, _ := io.ReadAll(rc)
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +511,7 @@ func Docx2md(arg string, embed bool) (string, error) {
 			rc, err := f.Open()
 			defer rc.Close()
 
-			b, _ := ioutil.ReadAll(rc)
+			b, _ := io.ReadAll(rc)
 			if err != nil {
 				return "", err
 			}
@@ -525,7 +524,7 @@ func Docx2md(arg string, embed bool) (string, error) {
 			rc, err := f.Open()
 			defer rc.Close()
 
-			b, _ := ioutil.ReadAll(rc)
+			b, _ := io.ReadAll(rc)
 			if err != nil {
 				return "", err
 			}

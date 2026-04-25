@@ -21,8 +21,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/server/web"
+	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
 )
 
@@ -114,42 +113,47 @@ func RunMigration() {
 
 //导出数据库的表结构
 func ExportDatabaseTable() ([]string, error) {
-	dbadapter, _ := web.AppConfig.String("db_adapter")
-	dbdatabase, _ := web.AppConfig.String("db_database")
+	dbadapter, _ := conf.GetString("db_adapter")
+	dbdatabase, _ := conf.GetString("db_database")
 	tables := make([]string, 0)
 
-	o := orm.NewOrm()
+	db := models.GetDB()
 	switch dbadapter {
 	case "mysql":
 		{
-			var lists []orm.Params
+			type tableName struct {
+				TableName string
+			}
+			var lists []tableName
 
-			_, err := o.Raw(fmt.Sprintf("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s'", dbdatabase)).Values(&lists)
-			if err != nil {
+			if err := db.Raw(fmt.Sprintf("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s'", dbdatabase)).Scan(&lists).Error; err != nil {
 				return tables, err
 			}
-			for _, table := range lists {
-				var results []orm.Params
-
-				_, err = o.Raw(fmt.Sprintf("show create table %s", table["TABLE_NAME"])).Values(&results)
-				if err != nil {
+			for _, t := range lists {
+				type createTableResult struct {
+					CreateTable string
+				}
+				var results []createTableResult
+				if err := db.Raw(fmt.Sprintf("show create table %s", t.TableName)).Scan(&results).Error; err != nil {
 					return tables, err
 				}
-				tables = append(tables, results[0]["Create Table"].(string))
+				if len(results) > 0 {
+					tables = append(tables, results[0].CreateTable)
+				}
 			}
 			break
 		}
 	case "sqlite3":
 		{
-			var results []orm.Params
-			_, err := o.Raw("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY rootpage ASC").Values(&results)
-			if err != nil {
+			type sqliteMaster struct {
+				SQL string
+			}
+			var results []sqliteMaster
+			if err := db.Raw("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY rootpage ASC").Scan(&results).Error; err != nil {
 				return tables, err
 			}
 			for _, item := range results {
-				if sql, ok := item["sql"]; ok {
-					tables = append(tables, sql.(string))
-				}
+				tables = append(tables, item.SQL)
 			}
 			break
 		}

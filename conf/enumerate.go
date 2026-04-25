@@ -8,8 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-
-	"github.com/beego/beego/v2/server/web"
 )
 
 // 登录用户的Session名
@@ -85,32 +83,32 @@ var (
 
 // app_key
 func GetAppKey() string {
-	return web.AppConfig.DefaultString("app_key", "mindoc")
+	return GetDefaultString("app_key", "mindoc")
 }
 
 func GetDatabasePrefix() string {
-	return web.AppConfig.DefaultString("db_prefix", "md_")
+	return GetDefaultString("db_prefix", "md_")
 }
 
 // 获取默认头像
 func GetDefaultAvatar() string {
-	return URLForWithCdnImage(web.AppConfig.DefaultString("avatar", "/static/images/headimgurl.jpg"))
+	return URLForWithCdnImage(GetDefaultString("avatar", "/static/images/headimgurl.jpg"))
 }
 
 // 获取阅读令牌长度.
 func GetTokenSize() int {
-	return web.AppConfig.DefaultInt("token_size", 12)
+	return GetDefaultInt("token_size", 12)
 }
 
 // 获取默认文档封面.
 func GetDefaultCover() string {
 
-	return URLForWithCdnImage(web.AppConfig.DefaultString("cover", "/static/images/book.jpg"))
+	return URLForWithCdnImage(GetDefaultString("cover", "/static/images/book.jpg"))
 }
 
 // 获取允许的上传文件的类型.
 func GetUploadFileExt() []string {
-	ext := web.AppConfig.DefaultString("upload_file_ext", "png|jpg|jpeg|gif|txt|doc|docx|pdf|mp4")
+	ext := GetDefaultString("upload_file_ext", "png|jpg|jpeg|gif|txt|doc|docx|pdf|mp4")
 
 	temp := strings.Split(ext, "|")
 
@@ -128,7 +126,7 @@ func GetUploadFileExt() []string {
 
 // 获取上传文件允许的最大值
 func GetUploadFileSize() int64 {
-	size := web.AppConfig.DefaultString("upload_file_size", "0")
+	size := GetDefaultString("upload_file_size", "0")
 
 	if strings.HasSuffix(size, "TB") {
 		if s, e := strconv.ParseInt(size[0:len(size)-2], 10, 64); e == nil {
@@ -158,17 +156,17 @@ func GetUploadFileSize() int64 {
 
 // 是否启用导出
 func GetEnableExport() bool {
-	return web.AppConfig.DefaultBool("enable_export", true)
+	return GetDefaultBool("enable_export", true)
 }
 
 // 是否启用iframe
 func GetEnableIframe() bool {
-	return web.AppConfig.DefaultBool("enable_iframe", false)
+	return GetDefaultBool("enable_iframe", false)
 }
 
 // 同一项目导出线程的并发数
 func GetExportProcessNum() int {
-	exportProcessNum := web.AppConfig.DefaultInt("export_process_num", 1)
+	exportProcessNum := GetDefaultInt("export_process_num", 1)
 
 	if exportProcessNum <= 0 || exportProcessNum > 4 {
 		exportProcessNum = 1
@@ -178,7 +176,7 @@ func GetExportProcessNum() int {
 
 // 导出项目队列的并发数量
 func GetExportLimitNum() int {
-	exportLimitNum := web.AppConfig.DefaultInt("export_limit_num", 1)
+	exportLimitNum := GetDefaultInt("export_limit_num", 1)
 
 	if exportLimitNum < 0 {
 		exportLimitNum = 1
@@ -188,7 +186,7 @@ func GetExportLimitNum() int {
 
 // 等待导出队列的长度
 func GetExportQueueLimitNum() int {
-	exportQueueLimitNum := web.AppConfig.DefaultInt("export_queue_limit_num", 10)
+	exportQueueLimitNum := GetDefaultInt("export_queue_limit_num", 10)
 
 	if exportQueueLimitNum <= 0 {
 		exportQueueLimitNum = 100
@@ -198,7 +196,7 @@ func GetExportQueueLimitNum() int {
 
 // 默认导出项目的缓存目录
 func GetExportOutputPath() string {
-	exportOutputPath := filepath.Join(web.AppConfig.DefaultString("export_output_path", filepath.Join(WorkingDirectory, "cache")), "books")
+	exportOutputPath := filepath.Join(GetDefaultString("export_output_path", filepath.Join(WorkingDirectory, "cache")), "books")
 
 	return exportOutputPath
 }
@@ -228,13 +226,64 @@ func CONF(key string, value ...string) string {
 	if len(value) > 0 {
 		defaultValue = value[0]
 	}
-	return web.AppConfig.DefaultString(key, defaultValue)
+	return GetDefaultString(key, defaultValue)
+}
+
+// 路由名称到路径的映射
+var routeMap = map[string]string{
+	"HomeController.Index":            "/",
+	"AccountController.Login":         "/login",
+	"AccountController.Logout":        "/logout",
+	"AccountController.Register":      "/register",
+	"AccountController.FindPassword":  "/find_password",
+	"AccountController.Captcha":       "/captcha",
+	"ManagerController.Index":         "/manager",
+	"ManagerController.Users":         "/manager/users",
+	"ManagerController.Books":         "/manager/books",
+	"ManagerController.Comments":      "/manager/comments",
+	"ManagerController.Setting":       "/manager/setting",
+	"ManagerController.AttachList":    "/manager/attach/list",
+	"ManagerController.LabelList":     "/manager/label/list",
+	"ManagerController.Team":          "/manager/team",
+	"ManagerController.Itemsets":      "/manager/itemsets",
+	"SettingController.Index":         "/setting",
+	"SettingController.Password":      "/setting/password",
+	"SettingController.Upload":        "/setting/upload",
+	"BookController.Index":            "/book",
+	"BookController.Create":           "/book/create",
+	"BookController.Dashboard":        "/book/:key/dashboard",
+	"BookController.Setting":          "/book/:key/setting",
+	"BookController.Users":            "/book/:key/users",
+	"DocumentController.Index":        "/docs/:key",
+	"DocumentController.Read":         "/docs/:key/:id",
+	"SearchController.Index":          "/search",
+	"SearchController.IndexV2":        "/search-v2",
+	"BlogController.List":             "/blogs",
+	"BlogController.Index":            "/blog-:id([0-9]+).html",
+	"BlogController.ManageList":       "/manage/blogs",
+	"BlogController.ManageSetting":    "/manage/blogs/setting",
+	"BlogController.ManageEdit":       "/manage/blogs/edit",
+	"CommentController.Index":         "/comment/index",
+}
+
+func urlForPath(endpoint string, values ...interface{}) string {
+	path, ok := routeMap[endpoint]
+	if !ok {
+		return "/"
+	}
+	result := path
+	for i := 0; i+1 < len(values); i += 2 {
+		if key, ok := values[i].(string); ok {
+			result = strings.Replace(result, ":"+key, fmt.Sprint(values[i+1]), 1)
+		}
+	}
+	return result
 }
 
 // 重写生成URL的方法，加上完整的域名
 func URLFor(endpoint string, values ...interface{}) string {
-	baseUrl := web.AppConfig.DefaultString("baseurl", "")
-	pathUrl := web.URLFor(endpoint, values...)
+	baseUrl := GetDefaultString("baseurl", "")
+	pathUrl := urlForPath(endpoint, values...)
 
 	if baseUrl == "" {
 		baseUrl = BaseUrl
@@ -248,12 +297,12 @@ func URLFor(endpoint string, values ...interface{}) string {
 	if !strings.HasPrefix(pathUrl, "/") && !strings.HasSuffix(baseUrl, "/") {
 		return baseUrl + "/" + pathUrl
 	}
-	return baseUrl + web.URLFor(endpoint, values...)
+	return baseUrl + pathUrl
 }
 
 func URLForNotHost(endpoint string, values ...interface{}) string {
-	baseUrl := web.AppConfig.DefaultString("baseurl", "")
-	pathUrl := web.URLFor(endpoint, values...)
+	baseUrl := GetDefaultString("baseurl", "")
+	pathUrl := urlForPath(endpoint, values...)
 
 	if baseUrl == "" {
 		baseUrl = "/"
@@ -267,17 +316,17 @@ func URLForNotHost(endpoint string, values ...interface{}) string {
 	if !strings.HasPrefix(pathUrl, "/") && !strings.HasSuffix(baseUrl, "/") {
 		return baseUrl + "/" + pathUrl
 	}
-	return baseUrl + web.URLFor(endpoint, values...)
+	return baseUrl + pathUrl
 }
 
 func URLForWithCdnImage(p string) string {
 	if strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
 		return p
 	}
-	cdn := web.AppConfig.DefaultString("cdnimg", "")
+	cdn := GetDefaultString("cdnimg", "")
 	//如果没有设置cdn，则使用baseURL拼接
 	if cdn == "" {
-		baseUrl := web.AppConfig.DefaultString("baseurl", "/")
+		baseUrl := GetDefaultString("baseurl", "/")
 
 		if strings.HasPrefix(p, "/") && strings.HasSuffix(baseUrl, "/") {
 			return baseUrl + p[1:]
@@ -297,7 +346,7 @@ func URLForWithCdnImage(p string) string {
 }
 
 func URLForWithCdnCss(p string, v ...string) string {
-	cdn := web.AppConfig.DefaultString("cdncss", "")
+	cdn := GetDefaultString("cdncss", "")
 	if strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
 		return p
 	}
@@ -308,7 +357,7 @@ func URLForWithCdnCss(p string, v ...string) string {
 	}
 	//如果没有设置cdn，则使用baseURL拼接
 	if cdn == "" {
-		baseUrl := web.AppConfig.DefaultString("baseurl", "/")
+		baseUrl := GetDefaultString("baseurl", "/")
 
 		if strings.HasPrefix(p, "/") && strings.HasSuffix(baseUrl, "/") {
 			return baseUrl + p[1:]
@@ -328,7 +377,7 @@ func URLForWithCdnCss(p string, v ...string) string {
 }
 
 func URLForWithCdnJs(p string, v ...string) string {
-	cdn := web.AppConfig.DefaultString("cdnjs", "")
+	cdn := GetDefaultString("cdnjs", "")
 	if strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
 		return p
 	}
@@ -341,7 +390,7 @@ func URLForWithCdnJs(p string, v ...string) string {
 
 	//如果没有设置cdn，则使用baseURL拼接
 	if cdn == "" {
-		baseUrl := web.AppConfig.DefaultString("baseurl", "/")
+		baseUrl := GetDefaultString("baseurl", "/")
 
 		if strings.HasPrefix(p, "/") && strings.HasSuffix(baseUrl, "/") {
 			return baseUrl + p[1:]

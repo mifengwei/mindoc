@@ -9,12 +9,9 @@ import (
 	"strings"
 
 	// preinit must be the first import: it chdirs to the exe directory before
-	// beego's init() tries to open conf/app.conf via a relative path.
+	// config loading tries to open conf/app.conf via a relative path.
 	_ "github.com/mindoc-org/mindoc/internal/preinit"
 
-	_ "github.com/beego/beego/v2/server/web/session/memcache"
-	_ "github.com/beego/beego/v2/server/web/session/mysql"
-	_ "github.com/beego/beego/v2/server/web/session/redis"
 	"github.com/kardianos/service"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/mindoc-org/mindoc/commands"

@@ -3,25 +3,24 @@ package models
 import (
 	"time"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
 	"github.com/mindoc-org/mindoc/conf"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 )
 
 type DocumentHistory struct {
-	HistoryId    int       `orm:"column(history_id);pk;auto;unique" json:"history_id"`
-	Action       string    `orm:"column(action);size(255);description(modify)" json:"action"`
-	ActionName   string    `orm:"column(action_name);size(255);description(修改文档)" json:"action_name"`
-	DocumentId   int       `orm:"column(document_id);type(int);index;description(关联文档id)" json:"doc_id"`
-	DocumentName string    `orm:"column(document_name);size(500);description(关联文档id)" json:"doc_name"`
-	ParentId     int       `orm:"column(parent_id);type(int);index;default(0);description(父级文档id)" json:"parent_id"`
-	Markdown     string    `orm:"column(markdown);type(text);null;description(文档内容)" json:"markdown"`
-	Content      string    `orm:"column(content);type(text);null;description(文档内容)" json:"content"`
-	MemberId     int       `orm:"column(member_id);type(int);description(作者id)" json:"member_id"`
-	ModifyTime   time.Time `orm:"column(modify_time);type(datetime);auto_now;description(修改时间)" json:"modify_time"`
-	ModifyAt     int       `orm:"column(modify_at);type(int);description(修改人id)" json:"-"`
-	Version      int64     `orm:"type(bigint);column(version);description(版本)" json:"version"`
-	IsOpen       int       `orm:"column(is_open);type(int);default(0);description(是否展开子目录 0：阅读时关闭节点 1：阅读时展开节点 2：空目录 单击时会展开下级节点)" json:"is_open"`
+	HistoryId    int       `gorm:"primaryKey;autoIncrement;uniqueIndex;column:history_id" json:"history_id"`
+	Action       string    `gorm:"size:255;column:action;comment:modify" json:"action"`
+	ActionName   string    `gorm:"size:255;column:action_name;comment:修改文档" json:"action_name"`
+	DocumentId   int       `gorm:"type:int;index;column:document_id;comment:关联文档id" json:"doc_id"`
+	DocumentName string    `gorm:"size:500;column:document_name;comment:关联文档id" json:"doc_name"`
+	ParentId     int       `gorm:"type:int;index;column:parent_id;default:0;comment:父级文档id" json:"parent_id"`
+	Markdown     string    `gorm:"type:text;column:markdown;comment:文档内容" json:"markdown"`
+	Content      string    `gorm:"type:text;column:content;comment:文档内容" json:"content"`
+	MemberId     int       `gorm:"type:int;column:member_id;comment:作者id" json:"member_id"`
+	ModifyTime   time.Time `gorm:"type:datetime;autoUpdateTime;column:modify_time;comment:修改时间" json:"modify_time"`
+	ModifyAt     int       `gorm:"type:int;column:modify_at;comment:修改人id" json:"-"`
+	Version      int64     `gorm:"type:bigint;column:version;comment:版本" json:"version"`
+	IsOpen       int       `gorm:"type:int;column:is_open;default:0;comment:是否展开子目录 0：阅读时关闭节点 1：阅读时展开节点 2：空目录 单击时会展开下级节点" json:"is_open"`
 }
 
 type DocumentHistorySimpleResult struct {
@@ -37,51 +36,39 @@ type DocumentHistorySimpleResult struct {
 
 // TableName 获取对应数据库表名.
 func (m *DocumentHistory) TableName() string {
-	return "document_history"
-}
-
-// TableEngine 获取数据使用的引擎.
-func (m *DocumentHistory) TableEngine() string {
-	return "INNODB"
-}
-
-func (m *DocumentHistory) TableNameWithPrefix() string {
-	return conf.GetDatabasePrefix() + m.TableName()
+	return conf.GetDatabasePrefix() + "document_history"
 }
 
 func NewDocumentHistory() *DocumentHistory {
 	return &DocumentHistory{}
 }
+
 func (m *DocumentHistory) Find(id int) (*DocumentHistory, error) {
-	o := orm.NewOrm()
-	err := o.QueryTable(m.TableNameWithPrefix()).Filter("history_id", id).One(m)
+	err := DB.Table(m.TableName()).Where("history_id = ?", id).First(m).Error
 
 	return m, err
 }
 
 //清空指定文档的历史.
 func (m *DocumentHistory) Clear(docId int) error {
-	o := orm.NewOrm()
 
-	_, err := o.Raw("DELETE md_document_history WHERE document_id = ?", docId).Exec()
+	err := DB.Exec("DELETE FROM md_document_history WHERE document_id = ?", docId).Error
 
 	return err
 }
 
 //删除历史.
 func (m *DocumentHistory) Delete(historyId, docId int) error {
-	o := orm.NewOrm()
 
-	_, err := o.QueryTable(m.TableNameWithPrefix()).Filter("history_id", historyId).Filter("document_id", docId).Delete()
+	err := DB.Table(m.TableName()).Where("history_id = ? AND document_id = ?", historyId, docId).Delete(nil).Error
 
 	return err
 }
 
 //恢复指定历史的文档.
 func (m *DocumentHistory) Restore(historyId, docId, uid int) error {
-	o := orm.NewOrm()
 
-	err := o.QueryTable(m.TableNameWithPrefix()).Filter("history_id", historyId).Filter("document_id", docId).One(m)
+	err := DB.Table(m.TableName()).Where("history_id = ? AND document_id = ?", historyId, docId).First(m).Error
 
 	if err != nil {
 		return err
@@ -113,36 +100,37 @@ func (m *DocumentHistory) Restore(historyId, docId, uid int) error {
 	doc.Version = time.Now().Unix()
 	doc.IsOpen = m.IsOpen
 
-	_, err = o.Update(doc)
+	err = DB.Save(doc).Error
 
 	return err
 }
 
 func (m *DocumentHistory) InsertOrUpdate() (history *DocumentHistory, err error) {
-	o := orm.NewOrm()
 	history = m
 
 	if m.HistoryId > 0 {
-		_, err = o.Update(m)
+		err = DB.Save(m).Error
 	} else {
-		_, err = o.Insert(m)
+		err = DB.Create(m).Error
 		if err == nil {
 			if doc, e := NewDocument().Find(m.DocumentId); e == nil {
 				if book, e := NewBook().Find(doc.BookId); e == nil && book.HistoryCount > 0 {
 					//如果已存在的历史记录大于指定的记录，则清除旧记录
-					if c, e := o.QueryTable(m.TableNameWithPrefix()).Filter("document_id", doc.DocumentId).Count(); e == nil && c > int64(book.HistoryCount) {
+					var c int64
+					DB.Table(m.TableName()).Where("document_id = ?", doc.DocumentId).Count(&c)
+					if c > int64(book.HistoryCount) {
 
-						count := c - int64(book.HistoryCount)
-						logs.Info("需要删除的历史文档数量：", count)
+						deleteCount := c - int64(book.HistoryCount)
+						logger.Info("需要删除的历史文档数量：", deleteCount)
 						var lists []DocumentHistory
 
-						if _, e := o.QueryTable(m.TableNameWithPrefix()).Filter("document_id", doc.DocumentId).OrderBy("history_id").Limit(count).All(&lists, "history_id"); e == nil {
+						if e := DB.Table(m.TableName()).Where("document_id = ?", doc.DocumentId).Order("history_id").Limit(int(deleteCount)).Select("history_id").Find(&lists).Error; e == nil {
 							for _, d := range lists {
-								o.Delete(&d)
+								DB.Delete(&d)
 							}
 						}
 					} else {
-						logs.Info(book.HistoryCount)
+						logger.Info(book.HistoryCount)
 					}
 				}
 			}
@@ -155,8 +143,6 @@ func (m *DocumentHistory) InsertOrUpdate() (history *DocumentHistory, err error)
 //分页查询指定文档的历史.
 func (m *DocumentHistory) FindToPager(docId, pageIndex, pageSize int) (docs []*DocumentHistorySimpleResult, totalCount int, err error) {
 
-	o := orm.NewOrm()
-
 	offset := (pageIndex - 1) * pageSize
 
 	totalCount = 0
@@ -167,14 +153,13 @@ LEFT JOIN md_members AS m1 ON history.member_id = m1.member_id
 LEFT JOIN md_members AS m2 ON history.modify_at = m2.member_id
 WHERE history.document_id = ? ORDER BY history.history_id DESC limit ? offset ?;`
 
-	_, err = o.Raw(sql, docId, pageSize, offset).QueryRows(&docs)
+	err = DB.Raw(sql, docId, pageSize, offset).Scan(&docs).Error
 
 	if err != nil {
 		return
 	}
 	var count int64
-	count, err = o.QueryTable(m.TableNameWithPrefix()).Filter("document_id", docId).Count()
-
+	err = DB.Table(m.TableName()).Where("document_id = ?", docId).Count(&count).Error
 	if err != nil {
 		return
 	}

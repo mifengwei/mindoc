@@ -3,8 +3,8 @@ package controllers
 import (
 	"math"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
+	"gorm.io/gorm"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
 	"github.com/mindoc-org/mindoc/utils/pagination"
@@ -32,10 +32,10 @@ func (c *ItemsetsController) Index() {
 
 	items, totalCount, err := models.NewItemsets().FindToPager(pageIndex, pageSize)
 
-	if err != nil && err != orm.ErrNoRows {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.ShowErrorPage(500, err.Error())
 	}
-	if err == orm.ErrNoRows || len(items) <= 0 {
+	if err == gorm.ErrRecordNotFound || len(items) <= 0 {
 		c.Data["Lists"] = items
 		c.Data["PageHtml"] = ""
 		return
@@ -64,10 +64,10 @@ func (c *ItemsetsController) List() {
 	item, err := models.NewItemsets().FindFirst(itemKey)
 
 	if err != nil {
-		if err == orm.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			c.Abort("404")
 		} else {
-			logs.Error(err)
+			logger.Error(err)
 			c.Abort("500")
 		}
 	}
@@ -77,7 +77,7 @@ func (c *ItemsetsController) List() {
 	}
 	searchResult, totalCount, err := models.NewItemsets().FindItemsetsByItemKey(itemKey, pageIndex, pageSize, memberId)
 
-	if err != nil && err != orm.ErrNoRows {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.ShowErrorPage(500, "查询文档列表时出错")
 	}
 	if totalCount > 0 {

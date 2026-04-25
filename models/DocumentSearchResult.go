@@ -6,9 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
-	"github.com/beego/beego/v2/server/web"
+	"github.com/mindoc-org/mindoc/pkg/logger"
+	"github.com/mindoc-org/mindoc/conf"
 )
 
 type DocumentSearchResult struct {
@@ -30,7 +29,7 @@ var escape_re = regexp.MustCompile(`(?mi)(\bLIKE\s+\?)`)
 var escape_replace = "${1} ESCAPE '\\'"
 
 func need_escape(keyword string) bool {
-	dbadapter, _ := web.AppConfig.String("db_adapter")
+	dbadapter, _ := conf.GetString("db_adapter")
 	if strings.EqualFold(dbadapter, "sqlite3") && (strings.Contains(keyword, "\\_") || strings.Contains(keyword, "\\%")) {
 		return true
 	}
@@ -38,7 +37,7 @@ func need_escape(keyword string) bool {
 }
 
 func escape_name(name string) string {
-	dbadapter, _ := web.AppConfig.String("db_adapter")
+	dbadapter, _ := conf.GetString("db_adapter")
 	ch := "`"
 	if strings.EqualFold(dbadapter, "postgres") {
 		ch = `"`
@@ -52,8 +51,6 @@ func NewDocumentSearchResult() *DocumentSearchResult {
 
 // 分页全局搜索.
 func (m *DocumentSearchResult) FindToPager(keyword string, pageIndex, pageSize, memberId int) (searchResult []*DocumentSearchResult, totalCount int, err error) {
-	o := orm.NewOrm()
-
 	offset := (pageIndex - 1) * pageSize
 
 	keyword = "%" + strings.Replace(keyword, " ", "%", -1) + "%"
@@ -141,9 +138,9 @@ WHERE book.privately_owned = 0 AND (book.book_name LIKE ? OR book.description LI
 ORDER BY relevance DESC, create_time DESC, document_id DESC
 LIMIT ? OFFSET ?;`
 
-		err = o.Raw(escape_sql(sql1), keyword, keyword).QueryRow(&totalCount)
+		err = DB.Raw(escape_sql(sql1), keyword, keyword).Scan(&totalCount).Error
 		if err != nil {
-			logs.Error("查询搜索结果失败 -> ", err)
+			logger.Error("查询搜索结果失败 -> ", err)
 			return
 		}
 		sql3 := `       SELECT
@@ -152,9 +149,9 @@ LIMIT ? OFFSET ?;`
        WHERE blog.blog_status = 'public' AND (blog.blog_release LIKE ? OR blog.blog_title LIKE ?);`
 
 		c := 0
-		err = o.Raw(escape_sql(sql3), keyword, keyword).QueryRow(&c)
+		err = DB.Raw(escape_sql(sql3), keyword, keyword).Scan(&c).Error
 		if err != nil {
-			logs.Error("查询搜索结果失败 -> ", err)
+			logger.Error("查询搜索结果失败 -> ", err)
 			return
 		}
 
@@ -163,17 +160,17 @@ LIMIT ? OFFSET ?;`
 		sql4 := `SELECT count(*) as total_count FROM md_books as book
 WHERE book.privately_owned = 0 AND (book.book_name LIKE ? OR book.description LIKE ?);`
 
-		err = o.Raw(escape_sql(sql4), keyword, keyword).QueryRow(&c)
+		err = DB.Raw(escape_sql(sql4), keyword, keyword).Scan(&c).Error
 		if err != nil {
-			logs.Error("查询搜索结果失败 -> ", err)
+			logger.Error("查询搜索结果失败 -> ", err)
 			return
 		}
 
 		totalCount += c
 
-		_, err = o.Raw(escape_sql(sql2), keyword, keyword, keyword, keyword, keyword, keyword, keyword, keyword, keyword, pageSize, offset).QueryRows(&searchResult)
+		err = DB.Raw(escape_sql(sql2), keyword, keyword, keyword, keyword, keyword, keyword, keyword, keyword, keyword, pageSize, offset).Scan(&searchResult).Error
 		if err != nil {
-			logs.Error("查询搜索结果失败 -> ", err)
+			logger.Error("查询搜索结果失败 -> ", err)
 			return
 		}
 	} else {
@@ -183,8 +180,8 @@ WHERE book.privately_owned = 0 AND (book.book_name LIKE ? OR book.description LI
   LEFT JOIN md_relationship AS rel1 ON doc.book_id = rel1.book_id AND rel1.member_id = ?
 			left join (select * from (select book_id,team_member_id,role_id
                    	from md_team_relationship as mtr
-					left join md_team_member as mtm on mtm.team_id=mtr.team_id and mtm.member_id=? order by role_id desc )as t group by t.role_id,t.team_member_id,t.book_id) as team 
-					on team.book_id = book.book_id
+						left join md_team_member as mtm on mtm.team_id=mtr.team_id and mtm.member_id=? order by role_id desc )as t group by t.role_id,t.team_member_id,t.book_id) as team
+						on team.book_id = book.book_id
 WHERE (book.privately_owned = 0 OR rel1.relationship_id > 0 or team.team_member_id > 0)  AND (doc.document_name LIKE ? OR doc.release LIKE ?);`
 
 		sql2 := `SELECT
@@ -262,7 +259,7 @@ FROM (
              (book.book_name LIKE ? OR book.description LIKE ?)
  UNION ALL
        SELECT
-         blog.blog_id AS document_id, 
+         blog.blog_id AS document_id,
          blog.modify_time,
          blog.create_time,
          blog.blog_title as document_name,
@@ -282,7 +279,7 @@ FROM (
 ORDER BY relevance DESC, create_time DESC, document_id DESC
 LIMIT ? OFFSET ?;`
 
-		err = o.Raw(escape_sql(sql1), memberId, memberId, keyword, keyword).QueryRow(&totalCount)
+		err = DB.Raw(escape_sql(sql1), memberId, memberId, keyword, keyword).Scan(&totalCount).Error
 		if err != nil {
 			return
 		}
@@ -293,9 +290,9 @@ LIMIT ? OFFSET ?;`
              (blog.blog_release LIKE ? OR blog.blog_title LIKE ?);`
 
 		c := 0
-		err = o.Raw(escape_sql(sql3), memberId, keyword, keyword).QueryRow(&c)
+		err = DB.Raw(escape_sql(sql3), memberId, keyword, keyword).Scan(&c).Error
 		if err != nil {
-			logs.Error("查询搜索结果失败 -> ", err)
+			logger.Error("查询搜索结果失败 -> ", err)
 			return
 		}
 
@@ -306,19 +303,19 @@ LIMIT ? OFFSET ?;`
   LEFT JOIN md_relationship AS rel1 ON book.book_id = rel1.book_id AND rel1.member_id = ?
 			left join (select * from (select book_id,team_member_id,role_id
                    	from md_team_relationship as mtr
-					left join md_team_member as mtm on mtm.team_id=mtr.team_id and mtm.member_id=? order by role_id desc )as t group by t.role_id,t.team_member_id,t.book_id) as team
-					on team.book_id = book.book_id
+						left join md_team_member as mtm on mtm.team_id=mtr.team_id and mtm.member_id=? order by role_id desc )as t group by t.role_id,t.team_member_id,t.book_id) as team
+						on team.book_id = book.book_id
 WHERE (book.privately_owned = 0 OR rel1.relationship_id > 0 or team.team_member_id > 0)  AND (book.book_name LIKE ? OR book.description LIKE ?);`
 
-		err = o.Raw(escape_sql(sql4), memberId, memberId, keyword, keyword).QueryRow(&c)
+		err = DB.Raw(escape_sql(sql4), memberId, memberId, keyword, keyword).Scan(&c).Error
 		if err != nil {
-			logs.Error("查询搜索结果失败 -> ", err)
+			logger.Error("查询搜索结果失败 -> ", err)
 			return
 		}
 
 		totalCount += c
 
-		_, err = o.Raw(escape_sql(sql2), keyword, memberId, memberId, keyword, keyword, keyword, memberId, memberId, keyword, keyword, keyword, memberId, keyword, keyword, pageSize, offset).QueryRows(&searchResult)
+		err = DB.Raw(escape_sql(sql2), keyword, memberId, memberId, keyword, keyword, keyword, memberId, memberId, keyword, keyword, keyword, memberId, keyword, keyword, pageSize, offset).Scan(&searchResult).Error
 		if err != nil {
 			return
 		}
@@ -328,8 +325,6 @@ WHERE (book.privately_owned = 0 OR rel1.relationship_id > 0 or team.team_member_
 
 // 项目内搜索.
 func (m *DocumentSearchResult) SearchDocument(keyword string, bookId int) (docs []*DocumentSearchResult, err error) {
-	o := orm.NewOrm()
-
 	sql := fmt.Sprintf("SELECT * FROM md_documents WHERE book_id = ? AND (document_name LIKE ? OR %s LIKE ?) ", escape_name("release"))
 	keyword = "%" + keyword + "%"
 
@@ -340,15 +335,13 @@ func (m *DocumentSearchResult) SearchDocument(keyword string, bookId int) (docs 
 		}
 		return sql
 	}
-	_, err = o.Raw(escape_sql(sql), bookId, keyword, keyword).QueryRows(&docs)
+	err = DB.Raw(escape_sql(sql), bookId, keyword, keyword).Scan(&docs).Error
 
 	return
 }
 
 // 所有项目搜索.
 func (m *DocumentSearchResult) SearchAllDocument(keyword string) (docs []*DocumentSearchResult, err error) {
-	o := orm.NewOrm()
-
 	sql := fmt.Sprintf("SELECT * FROM md_documents WHERE (document_name LIKE ? OR %s LIKE ?) ", escape_name("release"))
 	keyword = "%" + keyword + "%"
 
@@ -360,7 +353,7 @@ func (m *DocumentSearchResult) SearchAllDocument(keyword string) (docs []*Docume
 		return sql
 	}
 
-	_, err = o.Raw(escape_sql(sql), keyword, keyword).QueryRows(&docs)
+	err = DB.Raw(escape_sql(sql), keyword, keyword).Scan(&docs).Error
 
 	return
 }

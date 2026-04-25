@@ -90,7 +90,7 @@ type AccessToken struct {
 	AccessToken string `json:"access_token"`
 	ExpiresIn   int    `json:"expires_in"`
 
-	createTime time.Time `json:"create_time"`
+	CreateTime time.Time `json:"create_time"`
 }
 
 func (a AccessToken) GetToken() string {
@@ -102,7 +102,7 @@ func (a AccessToken) GetExpireIn() time.Duration {
 }
 
 func (a AccessToken) GetExpireTime() time.Time {
-	return a.createTime.Add(a.GetExpireIn())
+	return a.CreateTime.Add(a.GetExpireIn())
 }
 
 // 企业微信用户敏感信息-结构
@@ -165,7 +165,7 @@ func (c *WorkWechatClient) GetAccessToken(ctx context.Context) (auth2.IAccessTok
 	if err := auth2.Request(req, &token); err != nil {
 		return token, err
 	}
-	token.createTime = time.Now()
+	token.CreateTime = time.Now()
 	return token, nil
 }
 

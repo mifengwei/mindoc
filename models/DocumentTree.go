@@ -6,10 +6,7 @@ import (
 	"html/template"
 	"math"
 
-	"github.com/beego/beego/v2/client/orm"
 	"github.com/mindoc-org/mindoc/conf"
-	// "gorm.io/driver/sqlite"
-	// "gorm.io/gorm"
 )
 
 type DocumentTree struct {
@@ -24,14 +21,6 @@ type DocumentTree struct {
 	Children     []*DocumentTree        `json:"children"`
 }
 
-// type DocumentTreeJson struct {
-// 	gorm.Model
-// 	DocumentId   int                 `json:"id"`
-// 	DocumentName string              `json:"text"`
-// 	ParentId     interface{}         `json:"parent"`
-// 	Children     []*DocumentTreeJson `json:"children" gorm:"-"`
-// }
-
 type DocumentSelected struct {
 	Selected bool `json:"selected"`
 	Opened   bool `json:"opened"`
@@ -40,23 +29,22 @@ type DocumentSelected struct {
 
 // 获取项目的文档树状结构
 func (item *Document) FindDocumentTree(bookId int) ([]*DocumentTree, error) {
-	o := orm.NewOrm()
 
 	trees := make([]*DocumentTree, 0)
 
 	var docs []*Document
 
-	count, err := o.QueryTable(item).Filter("book_id", bookId).
-		OrderBy("order_sort", "document_id").
+	err := DB.Table(item.TableName()).Select("document_id, version, document_name, parent_id, identify, is_open").Where("book_id = ?", bookId).
+		Order("order_sort, document_id").
 		Limit(math.MaxInt32).
-		All(&docs, "document_id", "version", "document_name", "parent_id", "identify", "is_open")
+		Find(&docs).Error
 
 	if err != nil {
 		return trees, err
 	}
 	book, _ := NewBook().Find(bookId)
 
-	trees = make([]*DocumentTree, count)
+	trees = make([]*DocumentTree, len(docs))
 
 	for index, item := range docs {
 		tree := &DocumentTree{
@@ -93,23 +81,22 @@ func (item *Document) FindDocumentTree(bookId int) ([]*DocumentTree, error) {
 
 // 获取项目的文档树状结构2
 func (item *Document) FindDocumentTree2(bookId int) ([]*DocumentTree, error) {
-	o := orm.NewOrm()
 
 	trees := make([]*DocumentTree, 0)
 
 	var docs []*Document
 
-	count, err := o.QueryTable(item).Filter("book_id", bookId).
-		OrderBy("order_sort", "document_id").
+	err := DB.Table(item.TableName()).Select("document_id, version, document_name, parent_id, identify, is_open").Where("book_id = ?", bookId).
+		Order("order_sort, document_id").
 		Limit(math.MaxInt32).
-		All(&docs, "document_id", "version", "document_name", "parent_id", "identify", "is_open")
+		Find(&docs).Error
 
 	if err != nil {
 		return trees, err
 	}
 	book, _ := NewBook().Find(bookId)
 
-	trees = make([]*DocumentTree, count)
+	trees = make([]*DocumentTree, len(docs))
 
 	for index, item := range docs {
 		tree := &DocumentTree{

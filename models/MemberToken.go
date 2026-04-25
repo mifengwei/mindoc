@@ -3,32 +3,22 @@ package models
 import (
 	"time"
 
-	"github.com/beego/beego/v2/client/orm"
 	"github.com/mindoc-org/mindoc/conf"
 )
 
 type MemberToken struct {
-	TokenId   int       `orm:"column(token_id);pk;auto;unique" json:"token_id"`
-	MemberId  int       `orm:"column(member_id);type(int)" json:"member_id"`
-	Token     string    `orm:"column(token);size(150);index" json:"token"`
-	Email     string    `orm:"column(email);size(255)" json:"email"`
-	IsValid   bool      `orm:"column(is_valid)" json:"is_valid"`
-	ValidTime time.Time `orm:"column(valid_time);null" json:"valid_time"`
-	SendTime  time.Time `orm:"column(send_time);auto_now_add;type(datetime)" json:"send_time"`
+	TokenId   int       `gorm:"column:token_id;primaryKey;autoIncrement;uniqueIndex" json:"token_id"`
+	MemberId  int       `gorm:"column:member_id;type:int" json:"member_id"`
+	Token     string    `gorm:"column:token;size:150;index" json:"token"`
+	Email     string    `gorm:"column:email;size:255" json:"email"`
+	IsValid   bool      `gorm:"column:is_valid" json:"is_valid"`
+	ValidTime time.Time `gorm:"column:valid_time" json:"valid_time"`
+	SendTime  time.Time `gorm:"column:send_time;type:datetime;autoCreateTime" json:"send_time"`
 }
 
 // TableName 获取对应数据库表名.
 func (m *MemberToken) TableName() string {
-	return "member_token"
-}
-
-// TableEngine 获取数据使用的引擎.
-func (m *MemberToken) TableEngine() string {
-	return "INNODB"
-}
-
-func (m *MemberToken) TableNameWithPrefix() string {
-	return conf.GetDatabasePrefix() + m.TableName()
+	return conf.GetDatabasePrefix() + "member_token"
 }
 
 func NewMemberToken() *MemberToken {
@@ -36,29 +26,28 @@ func NewMemberToken() *MemberToken {
 }
 
 func (m *MemberToken) InsertOrUpdate() (*MemberToken, error) {
-	o := orm.NewOrm()
 
 	if m.TokenId > 0 {
-		_, err := o.Update(m)
+		err := DB.Save(m).Error
 		return m, err
 	}
-	_, err := o.Insert(m)
+	err := DB.Create(m).Error
 
 	return m, err
 }
 
 func (m *MemberToken) FindByFieldFirst(field string, value interface{}) (*MemberToken, error) {
-	o := orm.NewOrm()
-
-	err := o.QueryTable(m.TableNameWithPrefix()).Filter(field, value).OrderBy("-token_id").One(m)
+	err := DB.Table(m.TableName()).Where(field+" = ?", value).Order("token_id DESC").First(m).Error
 
 	return m, err
 }
 
 func (m *MemberToken) FindSendCount(mail string, start_time time.Time, end_time time.Time) (int, error) {
-	o := orm.NewOrm()
+	var c int64
 
-	c, err := o.QueryTable(m.TableNameWithPrefix()).Filter("send_time__gte", start_time.Format("2006-01-02 15:04:05")).Filter("send_time__lte", end_time.Format("2006-01-02 15:04:05")).Count()
+	err := DB.Table(m.TableName()).
+		Where("send_time >= ? AND send_time <= ?", start_time.Format("2006-01-02 15:04:05"), end_time.Format("2006-01-02 15:04:05")).
+		Count(&c).Error
 
 	if err != nil {
 		return 0, err

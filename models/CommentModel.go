@@ -4,52 +4,42 @@ import (
 	"errors"
 	"time"
 
-	"github.com/beego/beego/v2/client/orm"
 	"github.com/mindoc-org/mindoc/conf"
 )
 
 // Comment struct
 type Comment struct {
-	CommentId int `orm:"pk;auto;unique;column(comment_id)" json:"comment_id"`
-	Floor     int `orm:"column(floor);type(unsigned);default(0)" json:"floor"`
-	BookId    int `orm:"column(book_id);type(int)" json:"book_id"`
+	CommentId int `gorm:"primaryKey;autoIncrement;column:comment_id" json:"comment_id"`
+	Floor     int `gorm:"column:floor;type:unsigned;default:0" json:"floor"`
+	BookId    int `gorm:"column:book_id;type:int" json:"book_id"`
 	// DocumentId 评论所属的文档.
-	DocumentId int `orm:"column(document_id);type(int)" json:"document_id"`
+	DocumentId int `gorm:"column:document_id;type:int" json:"document_id"`
 	// Author 评论作者.
-	Author string `orm:"column(author);size(100)" json:"author"`
+	Author string `gorm:"column:author;size:100" json:"author"`
 	//MemberId 评论用户ID.
-	MemberId int `orm:"column(member_id);type(int)" json:"member_id"`
+	MemberId int `gorm:"column:member_id;type:int" json:"member_id"`
 	// IPAddress 评论者的IP地址
-	IPAddress string `orm:"column(ip_address);size(100)" json:"ip_address"`
+	IPAddress string `gorm:"column:ip_address;size:100" json:"ip_address"`
 	// 评论日期.
-	CommentDate time.Time `orm:"type(datetime);column(comment_date);auto_now_add" json:"comment_date"`
+	CommentDate time.Time `gorm:"type:datetime;column:comment_date;autoCreateTime" json:"comment_date"`
 	//Content 评论内容.
-	Content string `orm:"column(content);size(2000)" json:"content"`
+	Content string `gorm:"column:content;size:2000" json:"content"`
 	// Approved 评论状态：0 待审核/1 已审核/2 垃圾评论/ 3 已删除
-	Approved int `orm:"column(approved);type(int)" json:"approved"`
+	Approved int `gorm:"column:approved;type:int" json:"approved"`
 	// UserAgent 评论者浏览器内容
-	UserAgent string `orm:"column(user_agent);size(500)" json:"user_agent"`
+	UserAgent string `gorm:"column:user_agent;size:500" json:"user_agent"`
 	// Parent 评论所属父级
-	ParentId     int    `orm:"column(parent_id);type(int);default(0)" json:"parent_id"`
-	AgreeCount   int    `orm:"column(agree_count);type(int);default(0)" json:"agree_count"`
-	AgainstCount int    `orm:"column(against_count);type(int);default(0)" json:"against_count"`
-	Index        int    `orm:"-" json:"index"`
-	ShowDel      int    `orm:"-" json:"show_del"`
-	Avatar       string `orm:"-" json:"avatar"`
+	ParentId     int    `gorm:"column:parent_id;type:int;default:0" json:"parent_id"`
+	AgreeCount   int    `gorm:"column:agree_count;type:int;default:0" json:"agree_count"`
+	AgainstCount int    `gorm:"column:against_count;type:int;default:0" json:"against_count"`
+	Index        int    `gorm:"-" json:"index"`
+	ShowDel      int    `gorm:"-" json:"show_del"`
+	Avatar       string `gorm:"-" json:"avatar"`
 }
 
 // TableName 获取对应数据库表名.
 func (m *Comment) TableName() string {
-	return "comments"
-}
-
-// TableEngine 获取数据使用的引擎.
-func (m *Comment) TableEngine() string {
-	return "INNODB"
-}
-
-func (m *Comment) TableNameWithPrefix() string {
-	return conf.GetDatabasePrefix() + m.TableName()
+	return conf.GetDatabasePrefix() + "comments"
 }
 
 func NewComment() *Comment {
@@ -68,8 +58,9 @@ func (m *Comment) QueryCommentByDocumentId(doc_id, page, pagesize int, member *M
 		return
 	}
 
-	o := orm.NewOrm()
-	count, _ = o.QueryTable(m.TableNameWithPrefix()).Filter("document_id", doc_id).Count()
+	var c int64
+	DB.Table(m.TableName()).Where("document_id = ?", doc_id).Count(&c)
+	count = c
 	if -1 == page { // 请求最后一页
 		var total int = int(count)
 		if total%pagesize == 0 {
@@ -80,7 +71,7 @@ func (m *Comment) QueryCommentByDocumentId(doc_id, page, pagesize int, member *M
 	}
 	offset := (page - 1) * pagesize
 	ret_page = page
-	o.QueryTable(m.TableNameWithPrefix()).Filter("document_id", doc_id).OrderBy("comment_date").Offset(offset).Limit(pagesize).All(&comments)
+	DB.Table(m.TableName()).Where("document_id = ?", doc_id).Order("comment_date ASC").Offset(offset).Limit(pagesize).Find(&comments)
 
 	// 需要判断未登录的情况
 	var bookRole conf.BookRole
@@ -98,11 +89,10 @@ func (m *Comment) QueryCommentByDocumentId(doc_id, page, pagesize int, member *M
 }
 
 func (m *Comment) Update(cols ...string) error {
-	o := orm.NewOrm()
-
-	_, err := o.Update(m, cols...)
-
-	return err
+	if len(cols) > 0 {
+		return DB.Model(m).Select(cols[0], strsToInterfaces(cols[1:])...).Updates(m).Error
+	}
+	return DB.Save(m).Error
 }
 
 // Insert 添加一条评论.
@@ -114,12 +104,10 @@ func (m *Comment) Insert() error {
 		return ErrCommentContentNotEmpty
 	}
 
-	o := orm.NewOrm()
-
 	if m.CommentId > 0 {
 		comment := NewComment()
 		//如果父评论不存在
-		if err := o.Read(comment); err != nil {
+		if err := DB.First(comment, m.CommentId).Error; err != nil {
 			return err
 		}
 	}
@@ -166,21 +154,22 @@ func (m *Comment) Insert() error {
 		m.Author = "[匿名用户]"
 	}
 	m.BookId = book.BookId
-	_, err = o.Insert(m)
+	err = DB.Create(m).Error
 
 	return err
 }
 
 // 删除一条评论
 func (m *Comment) Delete() error {
-	o := orm.NewOrm()
-	_, err := o.Delete(m)
-	return err
+	return DB.Delete(m).Error
 }
 
 func (m *Comment) Find(id int, cols ...string) (*Comment, error) {
-	o := orm.NewOrm()
-	if err := o.QueryTable(m.TableNameWithPrefix()).Filter("comment_id", id).One(m, cols...); err != nil {
+	query := DB.Table(m.TableName()).Where("comment_id = ?", id)
+	if len(cols) > 0 {
+		query = query.Select(cols[0], strsToInterfaces(cols[1:])...)
+	}
+	if err := query.First(m).Error; err != nil {
 		return m, err
 	}
 	return m, nil

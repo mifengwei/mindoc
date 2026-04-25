@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beego/beego/v2/core/logs"
+	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/beego/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/graphics"
@@ -92,10 +92,13 @@ func (c *SettingController) Password() {
 // Upload 上传图片
 func (c *SettingController) Upload() {
 	file, moreFile, err := c.GetFile("image-file")
+	if err != nil || file == nil {
+		c.JsonResult(500, "读取文件异常")
+	}
 	defer file.Close()
 
 	if err != nil {
-		logs.Error("", err.Error())
+		logger.Error("", err.Error())
 		c.JsonResult(500, "读取文件异常")
 	}
 
@@ -128,7 +131,7 @@ func (c *SettingController) Upload() {
 	err = c.SaveToFile("image-file", filePath)
 
 	if err != nil {
-		logs.Error("", err)
+		logger.Error("", err)
 		c.JsonResult(500, "图片保存失败")
 	}
 
@@ -136,7 +139,7 @@ func (c *SettingController) Upload() {
 	subImg, err := graphics.ImageCopyFromFile(filePath, x, y, width, height)
 
 	if err != nil {
-		logs.Error("ImageCopyFromFile => ", err)
+		logger.Error("ImageCopyFromFile => ", err)
 		c.JsonResult(6001, "头像剪切失败")
 	}
 	os.Remove(filePath)
@@ -147,7 +150,7 @@ func (c *SettingController) Upload() {
 	//err = graphics.SaveImage(filePath,subImg)
 
 	if err != nil {
-		logs.Error("保存文件失败 => ", err.Error())
+		logger.Error("保存文件失败 => ", err.Error())
 		c.JsonResult(500, "保存文件失败")
 	}
 

@@ -5,7 +5,7 @@ package converter
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"strings"
 )
 
@@ -40,7 +40,7 @@ func GetMediaType(ext string) string {
 //解析配置文件
 func parseConfig(configFile string) (cfg Config, err error) {
 	var b []byte
-	if b, err = ioutil.ReadFile(configFile); err == nil {
+	if b, err = os.ReadFile(configFile); err == nil {
 		err = json.Unmarshal(b, &cfg)
 	}
 	return

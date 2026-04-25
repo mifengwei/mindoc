@@ -3,29 +3,20 @@ package models
 import (
 	"strings"
 
-	"github.com/beego/beego/v2/client/orm"
-	"github.com/beego/beego/v2/core/logs"
 	"github.com/mindoc-org/mindoc/conf"
+	"github.com/mindoc-org/mindoc/pkg/logger"
+	"gorm.io/gorm"
 )
 
 type Label struct {
-	LabelId    int    `orm:"column(label_id);pk;auto;unique;description(项目标签id)" json:"label_id"`
-	LabelName  string `orm:"column(label_name);size(50);unique;description(项目标签名称)" json:"label_name"`
-	BookNumber int    `orm:"column(book_number);description(包涵项目数量)" json:"book_number"`
+	LabelId    int    `gorm:"column:label_id;primaryKey;autoIncrement;uniqueIndex;description:项目标签id" json:"label_id"`
+	LabelName  string `gorm:"column:label_name;size:50;uniqueIndex;description:项目标签名称" json:"label_name"`
+	BookNumber int    `gorm:"column:book_number;description:包涵项目数量" json:"book_number"`
 }
 
 // TableName 获取对应数据库表名.
 func (m *Label) TableName() string {
-	return "label"
-}
-
-// TableEngine 获取数据使用的引擎.
-func (m *Label) TableEngine() string {
-	return "INNODB"
-}
-
-func (m *Label) TableNameWithPrefix() string {
-	return conf.GetDatabasePrefix() + m.TableName()
+	return conf.GetDatabasePrefix() + "label"
 }
 
 func NewLabel() *Label {
@@ -33,31 +24,28 @@ func NewLabel() *Label {
 }
 
 func (m *Label) FindFirst(field string, value interface{}) (*Label, error) {
-	o := orm.NewOrm()
-
-	err := o.QueryTable(m.TableNameWithPrefix()).Filter(field, value).One(m)
+	err := DB.Table(m.TableName()).Where(field+" = ?", value).First(m).Error
 
 	return m, err
 }
 
 //插入或更新标签.
 func (m *Label) InsertOrUpdate(labelName string) error {
-	o := orm.NewOrm()
-
-	err := o.QueryTable(m.TableNameWithPrefix()).Filter("label_name", labelName).One(m)
-	if err != nil && err != orm.ErrNoRows {
+	err := DB.Table(m.TableName()).Where("label_name = ?", labelName).First(m).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return err
 	}
-	count, _ := o.QueryTable(NewBook().TableNameWithPrefix()).Filter("label__icontains", labelName).Count()
+	var count int64
+	DB.Table(NewBook().TableName()).Where("label LIKE ?", "%"+labelName+"%").Count(&count)
 	m.BookNumber = int(count)
 	m.LabelName = labelName
 
-	if err == orm.ErrNoRows {
+	if err == gorm.ErrRecordNotFound {
 		err = nil
 		m.LabelName = labelName
-		_, err = o.Insert(m)
+		err = DB.Create(m).Error
 	} else {
-		_, err = o.Update(m)
+		err = DB.Save(m).Error
 	}
 	return err
 }
@@ -77,8 +65,7 @@ func (m *Label) InsertOrUpdateMulti(labels string) {
 
 //删除标签
 func (m *Label) Delete() error {
-	o := orm.NewOrm()
-	_, err := o.Raw("DELETE FROM "+m.TableNameWithPrefix()+" WHERE label_id= ?", m.LabelId).Exec()
+	err := DB.Exec("DELETE FROM "+m.TableName()+" WHERE label_id = ?", m.LabelId).Error
 
 	if err != nil {
 		return err
@@ -88,9 +75,9 @@ func (m *Label) Delete() error {
 
 //分页查找标签.
 func (m *Label) FindToPager(pageIndex, pageSize int) (labels []*Label, totalCount int, err error) {
-	o := orm.NewOrm()
 
-	count, err := o.QueryTable(m.TableNameWithPrefix()).Count()
+	var count int64
+	err = DB.Table(m.TableName()).Count(&count).Error
 
 	if err != nil {
 		return
@@ -99,10 +86,10 @@ func (m *Label) FindToPager(pageIndex, pageSize int) (labels []*Label, totalCoun
 
 	offset := (pageIndex - 1) * pageSize
 
-	_, err = o.QueryTable(m.TableNameWithPrefix()).OrderBy("-book_number").Offset(offset).Limit(pageSize).All(&labels)
+	err = DB.Table(m.TableName()).Order("book_number DESC").Offset(offset).Limit(pageSize).Find(&labels).Error
 
-	if err == orm.ErrNoRows {
-		logs.Info("没有查询到标签 ->", err)
+	if err == gorm.ErrRecordNotFound {
+		logger.Info("没有查询到标签 ->", err)
 		err = nil
 		return
 	}
