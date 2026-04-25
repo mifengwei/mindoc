@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - gin
 
 # 写入/读取 package 权限，用于推送到 GHCR (ghcr.io)
 permissions:
