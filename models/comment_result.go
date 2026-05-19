@@ -19,11 +19,11 @@ FROM md_comments AS comment
   LEFT JOIN md_comments AS parent ON comment.parent_id = parent.comment_id
   LEFT JOIN md_members AS p_member ON p_member.member_id = parent.member_id
 
-WHERE comment.document_id = ? ORDER BY comment.comment_id DESC LIMIT ?,?`
+WHERE comment.document_id = ? ORDER BY comment.comment_id DESC LIMIT ? OFFSET ?`
 
 	offset := (page_index - 1) * page_size
 
-	err = DB.Raw(sql1, doc_id, offset, page_size).Scan(&comments).Error
+	err = DB.Raw(sql1, doc_id, page_size, offset).Scan(&comments).Error
 
 	if err != nil {
 		return

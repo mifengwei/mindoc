@@ -12,7 +12,7 @@ type CommentVote struct {
 	CommentMemberId int       `gorm:"column:comment_member_id;type:int;index;default:0" json:"comment_member_id"`
 	VoteMemberId    int       `gorm:"column:vote_member_id;type:int;index" json:"vote_member_id"`
 	VoteState       int       `gorm:"column:vote_state;type:int" json:"vote_state"`
-	CreateTime      time.Time `gorm:"column:create_time;type:datetime;autoCreateTime" json:"create_time"`
+	CreateTime      time.Time `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 }
 
 // TableName 获取对应数据库表名.

@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 )
 
@@ -97,7 +97,7 @@ func (m *MemberRelationshipResult) FindForUsersByBookId(lang string, bookId, pag
 
 // 查询指定文档中不存在的用户列表
 func (m *MemberRelationshipResult) FindNotJoinUsersByAccount(bookId, limit int, account string) ([]*Member, error) {
-	sql := "SELECT m.* FROM md_members as m LEFT JOIN md_relationship as rel ON m.member_id=rel.member_id AND rel.book_id = ? WHERE rel.relationship_id IS NULL AND m.account LIKE ? LIMIT 0,?;"
+	sql := "SELECT m.* FROM md_members as m LEFT JOIN md_relationship as rel ON m.member_id=rel.member_id AND rel.book_id = ? WHERE rel.relationship_id IS NULL AND m.account LIKE ? LIMIT ? OFFSET 0;"
 
 	var members []*Member
 

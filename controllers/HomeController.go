@@ -18,7 +18,7 @@ func (c *HomeController) Prepare() {
 	c.BaseController.Prepare()
 	//如果没有开启匿名访问，则跳转到登录页面
 	if !c.EnableAnonymous && c.Member == nil {
-		c.Redirect(conf.URLFor("AccountController.Login")+"?url="+url.PathEscape(conf.BaseUrl+c.Ctx.Request.URL.RequestURI()), 302)
+		c.Redirect(conf.URLFor("AccountController.Login")+"?url="+url.PathEscape(conf.BaseUrl+c.Gin.Request.URL.RequestURI()), 302)
 	}
 }
 
@@ -38,7 +38,7 @@ func (c *HomeController) Index() {
 		c.Abort("500")
 	}
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, pageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, pageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""

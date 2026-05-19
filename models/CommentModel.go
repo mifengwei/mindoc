@@ -10,7 +10,7 @@ import (
 // Comment struct
 type Comment struct {
 	CommentId int `gorm:"primaryKey;autoIncrement;column:comment_id" json:"comment_id"`
-	Floor     int `gorm:"column:floor;type:unsigned;default:0" json:"floor"`
+	Floor     int `gorm:"column:floor;default:0" json:"floor"`
 	BookId    int `gorm:"column:book_id;type:int" json:"book_id"`
 	// DocumentId 评论所属的文档.
 	DocumentId int `gorm:"column:document_id;type:int" json:"document_id"`
@@ -21,7 +21,7 @@ type Comment struct {
 	// IPAddress 评论者的IP地址
 	IPAddress string `gorm:"column:ip_address;size:100" json:"ip_address"`
 	// 评论日期.
-	CommentDate time.Time `gorm:"type:datetime;column:comment_date;autoCreateTime" json:"comment_date"`
+	CommentDate time.Time `gorm:"column:comment_date;autoCreateTime" json:"comment_date"`
 	//Content 评论内容.
 	Content string `gorm:"column:content;size:2000" json:"content"`
 	// Approved 评论状态：0 待审核/1 已审核/2 垃圾评论/ 3 已删除

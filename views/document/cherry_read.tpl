@@ -316,7 +316,7 @@
 $(function () {
     $("#searchList").on("click","a",function () {
         var id = $(this).attr("data-id");
-        var url = "{{urlfor "DocumentController.Read" ":key" .Model.Identify ":id" ""}}/" + id;
+        var url = "{{urlfor "DocumentController.Read" ":key" .Model.Identify ":id" ""}}" + id;
         $(this).parent("li").siblings().find("a").removeClass("active");
         $(this).addClass("active");
         loadDocument(url,id,function (body) {

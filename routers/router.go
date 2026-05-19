@@ -1,8 +1,6 @@
 package routers
 
-// 旧版 Beego 路由已被 Gin 路由替代。
-// 所有路由注册现在在 router_gin.go 中完成。
-// CorsTransport 和辅助函数保留在此文件中供 bridge.go 使用。
+// CorsTransport 和辅助函数供 bridge.go 使用。
 
 import (
 	"net/http"

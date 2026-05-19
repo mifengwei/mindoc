@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -15,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/mindoc-org/mindoc/conf"
@@ -29,7 +28,6 @@ type AbortPanic struct{}
 
 type BaseController struct {
 	Gin                  *gin.Context
-	Ctx                  *BeegoCtx
 	Member               *models.Member
 	Option               map[string]string
 	EnableAnonymous      bool
@@ -42,157 +40,8 @@ type BaseController struct {
 	xsrfToken            string
 	controllerName       string
 	actionName           string
-	CruSession           *BeegoSession
-}
-
-// BeegoCtx 提供与 Beego context.Context 兼容的接口
-type BeegoCtx struct {
-	Input          *BeegoInput
-	Output         *BeegoOutput
-	Request        *http.Request
-	ResponseWriter http.ResponseWriter
-	gin            *gin.Context
-}
-
-func newBeegoCtx(c *gin.Context) *BeegoCtx {
-	// 读取请求体（供 RequestBody 字段使用）
-	var body []byte
-	if c.Request != nil && c.Request.Body != nil {
-		body, _ = io.ReadAll(c.Request.Body)
-		c.Request.Body = io.NopCloser(bytes.NewReader(body))
-	}
-
-	ctx := &BeegoCtx{
-		Request:        c.Request,
-		ResponseWriter: c.Writer,
-		gin:            c,
-	}
-	ctx.Input = &BeegoInput{gin: c, RequestBody: body}
-	ctx.Output = &BeegoOutput{gin: c, ctx: ctx}
-	return ctx
-}
-
-// BeegoInput 模拟 Beego Input 接口
-type BeegoInput struct {
-	gin         *gin.Context
-	RequestBody []byte
-}
-
-func (i *BeegoInput) IsPost() bool {
-	return i.gin.Request.Method == "POST"
-}
-
-func (i *BeegoInput) IsGet() bool {
-	return i.gin.Request.Method == "GET"
-}
-
-func (i *BeegoInput) IsAjax() bool {
-	return i.gin.GetHeader("X-Requested-With") != ""
-}
-
-func (i *BeegoInput) Param(key string) string {
-	if strings.HasPrefix(key, ":") {
-		key = key[1:]
-	}
-	return i.gin.Param(key)
-}
-
-func (i *BeegoInput) Query(key string) string {
-	return i.gin.Query(key)
-}
-
-func (i *BeegoInput) UserAgent() string {
-	return i.gin.GetHeader("User-Agent")
-}
-
-func (i *BeegoInput) Scheme() string {
-	if i.gin.Request.TLS != nil || i.gin.GetHeader("X-Forwarded-Proto") == "https" {
-		return "https"
-	}
-	return "http"
-}
-
-func (i *BeegoInput) IP() string {
-	return i.gin.ClientIP()
-}
-
-func (i *BeegoInput) Method() string {
-	return i.gin.Request.Method
-}
-
-func (i *BeegoInput) Header(key string) string {
-	return i.gin.GetHeader(key)
-}
-
-func (i *BeegoInput) Cookie(key string) string {
-	val, _ := i.gin.Cookie(key)
-	return val
-}
-
-func (i *BeegoInput) Session(key interface{}) interface{} {
-	session := sessions.Default(i.gin)
-	return session.Get(fmt.Sprintf("%v", key))
-}
-
-func (i *BeegoInput) Referer() string {
-	return i.gin.GetHeader("Referer")
-}
-
-// BeegoOutput 模拟 Beego Output 接口
-type BeegoOutput struct {
-	gin *gin.Context
-	ctx *BeegoCtx
-}
-
-func (o *BeegoOutput) JSON(data interface{}, hasIndent bool, encoding bool) error {
-	o.gin.JSON(http.StatusOK, data)
-	return nil
-}
-
-func (o *BeegoOutput) Download(file string, filenames ...string) {
-	if len(filenames) > 0 {
-		o.gin.FileAttachment(file, filenames[0])
-	} else {
-		o.gin.File(file)
-	}
-}
-
-func (o *BeegoOutput) Body(data []byte) {
-	_, _ = o.gin.Writer.Write(data)
-}
-
-// BeegoSession 模拟 Beego Session 接口
-type BeegoSession struct {
-	gin *gin.Context
-}
-
-func newBeegoSession(c *gin.Context) *BeegoSession {
-	return &BeegoSession{gin: c}
-}
-
-func (s *BeegoSession) Get(ctx context.Context, key interface{}) interface{} {
-	session := sessions.Default(s.gin)
-	return session.Get(fmt.Sprintf("%v", key))
-}
-
-func (s *BeegoSession) Set(ctx context.Context, key interface{}, value interface{}) error {
-	session := sessions.Default(s.gin)
-	session.Set(fmt.Sprintf("%v", key), value)
-	return session.Save()
-}
-
-func (s *BeegoSession) Delete(ctx context.Context, key interface{}) error {
-	session := sessions.Default(s.gin)
-	session.Delete(fmt.Sprintf("%v", key))
-	return session.Save()
-}
-
-func (s *BeegoSession) SessionID(ctx context.Context) string {
-	return ""
-}
-
-func (s *BeegoSession) Flush() error {
-	return nil
+	requestBody          []byte
+	prepared             bool
 }
 
 type CookieRemember struct {
@@ -203,10 +52,14 @@ type CookieRemember struct {
 
 // Prepare 预处理
 func (c *BaseController) Prepare() {
-	// 初始化 Beego 兼容上下文
-	if c.Gin != nil && c.Ctx == nil {
-		c.Ctx = newBeegoCtx(c.Gin)
-		c.CruSession = newBeegoSession(c.Gin)
+	if c.prepared {
+		return
+	}
+	c.prepared = true
+
+	if c.Gin != nil && c.Gin.Request != nil && c.Gin.Request.Body != nil && c.requestBody == nil {
+		c.requestBody, _ = io.ReadAll(c.Gin.Request.Body)
+		c.Gin.Request.Body = io.NopCloser(bytes.NewReader(c.requestBody))
 	}
 
 	c.Data = make(map[string]interface{})
@@ -489,6 +342,21 @@ func (c *BaseController) GetBool(key string, def ...bool) (bool, error) {
 	return strings.EqualFold(str, "true") || str == "1", nil
 }
 
+// IsPost 判断是否是 POST 请求
+func (c *BaseController) IsPost() bool {
+	return c.Gin.Request.Method == "POST"
+}
+
+// SessionID 获取当前会话 ID
+func (c *BaseController) SessionID() string {
+	return sessions.Default(c.Gin).ID()
+}
+
+// GetRequestBody 获取请求体原始字节
+func (c *BaseController) GetRequestBody() []byte {
+	return c.requestBody
+}
+
 // ========== Session 方法 ==========
 
 // GetSession 获取 session
@@ -556,6 +424,7 @@ func (c *BaseController) SetSecureCookie(secret, name, value string, others ...i
 // StopRun 停止执行后续逻辑
 func (c *BaseController) StopRun() {
 	c.Gin.Abort()
+	panic(AbortPanic{})
 }
 
 // Abort 中止请求
@@ -711,31 +580,7 @@ func cdnFunc(p string) string {
 }
 
 func urlForFunc(endpoint string, values ...interface{}) string {
-	routeMap := map[string]string{
-		"HomeController.Index":        "/",
-		"AccountController.Login":     "/login",
-		"AccountController.Logout":    "/logout",
-		"ManagerController.Index":     "/manager",
-		"BookController.Index":        "/book",
-		"DocumentController.Index":    "/docs/:key",
-		"DocumentController.Read":     "/docs/:key/:id",
-		"SearchController.Index":      "/search",
-		"BlogController.List":         "/blogs",
-		"SettingController.Index":     "/setting",
-	}
-	path, ok := routeMap[endpoint]
-	if !ok {
-		return "/"
-	}
-	result := path
-	baseUrl := conf.BaseUrl
-	if baseUrl == "" {
-		return result
-	}
-	if strings.HasPrefix(result, "/") && strings.HasSuffix(baseUrl, "/") {
-		return baseUrl + result[1:]
-	}
-	return baseUrl + result
+	return conf.URLFor(endpoint, values...)
 }
 
 // HTML2Str 将 HTML 转换为纯文本

@@ -18,7 +18,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/howeyc/fsnotify"
 	_ "github.com/lib/pq"
 	"github.com/lifei6671/gocaptcha"

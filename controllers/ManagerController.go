@@ -13,7 +13,7 @@ import (
 	"os"
 
 	"github.com/mindoc-org/mindoc/pkg/logger"
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
 	"github.com/mindoc-org/mindoc/utils"
@@ -57,7 +57,7 @@ func (c *ManagerController) Users() {
 	}
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 
 		for _, item := range members {
@@ -213,7 +213,7 @@ func (c *ManagerController) EditMember() {
 		logger.Error(err)
 		c.Abort("404")
 	}
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		password1 := c.GetString("password1")
 		password2 := c.GetString("password2")
 		email := c.GetString("email")
@@ -295,9 +295,9 @@ func (c *ManagerController) Books() {
 	}
 
 	if totalCount > 0 {
-		//html := utils.GetPagerHtml(c.Ctx.Request.RequestURI, pageIndex, 8, totalCount)
+		//html := utils.GetPagerHtml(c.Gin.Request.RequestURI, pageIndex, 8, totalCount)
 
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
@@ -327,7 +327,7 @@ func (c *ManagerController) EditBook() {
 		c.Abort("500")
 	}
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		bookName := strings.TrimSpace(c.GetString("book_name"))
 		description := strings.TrimSpace(c.GetString("description", ""))
 		commentStatus := c.GetString("comment_status")
@@ -465,7 +465,7 @@ func (c *ManagerController) Setting() {
 	c.Data["Action"] = "setting"
 	options, err := models.NewOption().All()
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		for _, item := range options {
 			item.OptionValue = c.GetString(item.OptionName)
 			item.InsertOrUpdate()
@@ -629,7 +629,7 @@ func (c *ManagerController) AttachList() {
 	}
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -686,7 +686,7 @@ func (c *ManagerController) AttachDetailed() {
 	c.TplName = "manager/attach_detailed.tpl"
 	c.Data["Action"] = "attach"
 
-	attach_id, _ := strconv.Atoi(c.Ctx.Input.Param(":id"))
+	attach_id, _ := strconv.Atoi(c.Gin.Param("id"))
 	if attach_id <= 0 {
 		c.Abort("404")
 	}
@@ -744,7 +744,7 @@ func (c *ManagerController) LabelList() {
 		c.ShowErrorPage(50001, err.Error())
 	}
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -756,7 +756,7 @@ func (c *ManagerController) LabelList() {
 
 // 删除标签
 func (c *ManagerController) LabelDelete() {
-	labelId, err := strconv.Atoi(c.Ctx.Input.Param(":id"))
+	labelId, err := strconv.Atoi(c.Gin.Param("id"))
 	if err != nil {
 		logger.Error("获取删除标签参数时出错:", err)
 		c.JsonResult(50001, i18n.Tr(c.Lang, "message.param_error"))
@@ -781,7 +781,7 @@ func (c *ManagerController) Config() {
 	c.Prepare()
 	c.TplName = "manager/config.tpl"
 	c.Data["Action"] = "config"
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		content := strings.TrimSpace(c.GetString("configFileTextArea"))
 		if content == "" {
 			c.JsonResult(500, "配置文件不能为空")
@@ -832,7 +832,7 @@ func (c *ManagerController) Team() {
 	}
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -908,7 +908,7 @@ func (c *ManagerController) TeamMemberList() {
 	c.Prepare()
 	c.TplName = "manager/team_member_list.tpl"
 	c.Data["Action"] = "team"
-	teamId, _ := strconv.Atoi(c.Ctx.Input.Param(":id"))
+	teamId, _ := strconv.Atoi(c.Gin.Param("id"))
 	if teamId <= 0 {
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.param_error"))
 	}
@@ -932,7 +932,7 @@ func (c *ManagerController) TeamMemberList() {
 	}
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -1030,7 +1030,7 @@ func (c *ManagerController) TeamBookList() {
 	c.Prepare()
 	c.TplName = "manager/team_book_list.tpl"
 	c.Data["Action"] = "team"
-	teamId, _ := strconv.Atoi(c.Ctx.Input.Param(":id"))
+	teamId, _ := strconv.Atoi(c.Gin.Param("id"))
 	pageIndex, _ := c.GetInt("page", 0)
 
 	if teamId <= 0 {
@@ -1057,7 +1057,7 @@ func (c *ManagerController) TeamBookList() {
 	}
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -1152,7 +1152,7 @@ func (c *ManagerController) Itemsets() {
 	}
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""

@@ -132,7 +132,7 @@
                     $("#blogId").val($res.data.blog_id);
                     if (blogId === 0) {
                         // 优化新增文章后直接跳转到编辑页面
-                        window.location.href = {{urlfor "BlogController.ManageEdit" ":id" "xxx"}}.replace("xxx", $res.data.blog_id)
+                        window.location.href = "{{urlfor "BlogController.ManageEdit"}}/" + $res.data.blog_id
                     }
                 }else{
                     showError($res.message);

@@ -17,7 +17,7 @@ type DocumentHistory struct {
 	Markdown     string    `gorm:"type:text;column:markdown;comment:文档内容" json:"markdown"`
 	Content      string    `gorm:"type:text;column:content;comment:文档内容" json:"content"`
 	MemberId     int       `gorm:"type:int;column:member_id;comment:作者id" json:"member_id"`
-	ModifyTime   time.Time `gorm:"type:datetime;autoUpdateTime;column:modify_time;comment:修改时间" json:"modify_time"`
+	ModifyTime   time.Time `gorm:"autoUpdateTime;column:modify_time;comment:修改时间" json:"modify_time"`
 	ModifyAt     int       `gorm:"type:int;column:modify_at;comment:修改人id" json:"-"`
 	Version      int64     `gorm:"type:bigint;column:version;comment:版本" json:"version"`
 	IsOpen       int       `gorm:"type:int;column:is_open;default:0;comment:是否展开子目录 0：阅读时关闭节点 1：阅读时展开节点 2：空目录 单击时会展开下级节点" json:"is_open"`

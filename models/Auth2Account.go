@@ -33,9 +33,9 @@ type WorkWeixinAccount struct {
 	// WorkWeixin_Email  string    `gorm:"size:255;column:workweixin_email" json:"workweixin_email"`
 	// WorkWeixin_Status int       `gorm:"type:int;column:status" json:"status"`
 	// WorkWeixin_Avatar string    `gorm:"size:1024;column:avatar" json:"avatar"`
-	CreateTime    time.Time `gorm:"type:datetime;column:create_time;autoCreateTime" json:"create_time"`
+	CreateTime    time.Time `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	CreateAt      int       `gorm:"type:int;column:create_at" json:"create_at"`
-	LastLoginTime time.Time `gorm:"type:datetime;column:last_login_time" json:"last_login_time"`
+	LastLoginTime time.Time `gorm:"column:last_login_time" json:"last_login_time"`
 }
 
 // TableName 获取对应数据库表名.
@@ -102,9 +102,9 @@ type DingTalkAccount struct {
 	MemberId        int       `gorm:"column:member_id;type:int;default:-1;index" json:"member_id"`
 	UserDbId        int       `gorm:"primaryKey;autoIncrement;column:user_db_id" json:"user_db_id"`
 	Dingtalk_UserId string    `gorm:"size:100;column:dingtalk_user_id;uniqueIndex" json:"dingtalk_user_id"`
-	CreateTime      time.Time `gorm:"type:datetime;column:create_time;autoCreateTime" json:"create_time"`
+	CreateTime      time.Time `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	CreateAt        int       `gorm:"type:int;column:create_at" json:"create_at"`
-	LastLoginTime   time.Time `gorm:"type:datetime;column:last_login_time" json:"last_login_time"`
+	LastLoginTime   time.Time `gorm:"column:last_login_time" json:"last_login_time"`
 }
 
 // TableName 获取对应数据库表名.

@@ -3,7 +3,6 @@ package routers
 import (
 	"net/http"
 	"net/url"
-	"regexp"
 
 	sessions "github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -19,21 +18,6 @@ func HeaderMiddleware() gin.HandlerFunc {
 		c.Header("MinDoc-Version", conf.VERSION)
 		c.Header("MinDoc-Site", "https://www.iminho.me")
 		c.Header("X-XSS-Protection", "1; mode=block")
-		c.Next()
-	}
-}
-
-// SessionValidationMiddleware 校验 sessionId 格式
-func SessionValidationMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		sessname := conf.GetDefaultString("sessionname", "mindoc_id")
-		sessionId, _ := c.Cookie(sessname)
-		if sessionId != "" {
-			if ok, err := regexp.MatchString(`^[a-zA-Z0-9]{32,512}$`, sessionId); !ok || err != nil {
-				// 格式不匹配时不阻断，仅清除 cookie
-				c.SetCookie(sessname, "", -1, "/", "", false, true)
-			}
-		}
 		c.Next()
 	}
 }

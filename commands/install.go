@@ -9,7 +9,7 @@ import (
 	"flag"
 
 	"github.com/mindoc-org/mindoc/pkg/logger"
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
 	"github.com/mindoc-org/mindoc/utils"

@@ -11,7 +11,7 @@ type Migration struct {
 	Name        string    `gorm:"column:name;size:500" json:"name"`
 	Statements  string    `gorm:"column:statements;type:text" json:"statements"`
 	Status      string    `gorm:"column:status;default:update" json:"status"`
-	CreateTime  time.Time `gorm:"column:create_time;type:datetime;autoCreateTime" json:"create_time"`
+	CreateTime  time.Time `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	Version     int64     `gorm:"type:bigint;column:version;uniqueIndex" json:"version"`
 }
 

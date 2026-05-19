@@ -2,12 +2,12 @@
 package conf
 
 import (
-	"strings"
-
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // 登录用户的Session名
@@ -231,39 +231,124 @@ func CONF(key string, value ...string) string {
 
 // 路由名称到路径的映射
 var routeMap = map[string]string{
-	"HomeController.Index":            "/",
-	"AccountController.Login":         "/login",
-	"AccountController.Logout":        "/logout",
-	"AccountController.Register":      "/register",
-	"AccountController.FindPassword":  "/find_password",
-	"AccountController.Captcha":       "/captcha",
-	"ManagerController.Index":         "/manager",
-	"ManagerController.Users":         "/manager/users",
-	"ManagerController.Books":         "/manager/books",
-	"ManagerController.Comments":      "/manager/comments",
-	"ManagerController.Setting":       "/manager/setting",
-	"ManagerController.AttachList":    "/manager/attach/list",
-	"ManagerController.LabelList":     "/manager/label/list",
-	"ManagerController.Team":          "/manager/team",
-	"ManagerController.Itemsets":      "/manager/itemsets",
-	"SettingController.Index":         "/setting",
-	"SettingController.Password":      "/setting/password",
-	"SettingController.Upload":        "/setting/upload",
-	"BookController.Index":            "/book",
-	"BookController.Create":           "/book/create",
-	"BookController.Dashboard":        "/book/:key/dashboard",
-	"BookController.Setting":          "/book/:key/setting",
-	"BookController.Users":            "/book/:key/users",
-	"DocumentController.Index":        "/docs/:key",
-	"DocumentController.Read":         "/docs/:key/:id",
-	"SearchController.Index":          "/search",
-	"SearchController.IndexV2":        "/search-v2",
-	"BlogController.List":             "/blogs",
-	"BlogController.Index":            "/blog-:id([0-9]+).html",
-	"BlogController.ManageList":       "/manage/blogs",
-	"BlogController.ManageSetting":    "/manage/blogs/setting",
-	"BlogController.ManageEdit":       "/manage/blogs/edit",
-	"CommentController.Index":         "/comment/index",
+	"AccountController.Auth2AutoAccount": "/auth2/account/auto/:app",
+	"AccountController.Auth2BindAccount": "/auth2/account/bind/:app",
+	"AccountController.Auth2Callback":    "/auth2/callback/:app",
+	"AccountController.Auth2Redirect":    "/auth2/redirect/:app",
+	"AccountController.Captcha":          "/captcha",
+	"AccountController.FindPassword":     "/find_password",
+	"AccountController.Login":            "/login",
+	"AccountController.Logout":           "/logout",
+	"AccountController.Register":         "/register",
+	"AccountController.ValidEmail":       "/valid_email",
+	"BlogController.Index":               "/blog/:id",
+	"BlogController.List":                "/blogs",
+	"BlogController.Download":            "/blog/attach/:id/:attach_id",
+	"BlogController.ManageDelete":        "/manage/blogs/delete",
+	"BlogController.ManageEdit":          "/manage/blogs/edit",
+	"BlogController.ManageList":          "/manage/blogs",
+	"BlogController.ManageSetting":       "/manage/blogs/setting",
+	"BlogController.RemoveAttachment":    "/manage/blogs/attach/:id",
+	"BlogController.Upload":              "/manage/blogs/upload",
+	"BookController.Copy":                "/book/users/copy",
+	"BookController.Create":              "/book/create",
+	"BookController.CreateToken":         "/manager/books/token",
+	"BookController.Dashboard":           "/book/:key/dashboard",
+	"BookController.Delete":              "/book/setting/delete",
+	"BookController.Import":              "/book/users/import",
+	"BookController.Index":               "/book",
+	"BookController.ItemsetsSearch":      "/book/itemsets/search",
+	"BookController.PrivatelyOwned":      "/book/setting/open",
+	"BookController.Release":             "/book/:key/release",
+	"BookController.SaveBook":            "/book/setting/save",
+	"BookController.SaveSort":            "/book/:key/sort",
+	"BookController.Setting":             "/book/:key/setting",
+	"BookController.Team":                "/book/:key/teams",
+	"BookController.TeamAdd":             "/book/team/add",
+	"BookController.TeamDelete":          "/book/team/delete",
+	"BookController.TeamSearch":          "/book/team/search",
+	"BookController.Transfer":            "/book/setting/transfer",
+	"BookController.UpdateBookOrder":     "/book/updatebookorder",
+	"BookController.UploadCover":         "/book/setting/upload",
+	"BookController.Users":               "/book/:key/users",
+	"BookMemberController.AddMember":     "/book/users/create",
+	"BookMemberController.ChangeRole":    "/book/users/change",
+	"BookMemberController.RemoveMember":  "/book/users/delete",
+	"CommentController.Create":           "/comment/create",
+	"CommentController.Delete":           "/comment/delete",
+	"CommentController.Index":            "/comment/index",
+	"CommentController.Lists":            "/comment/lists",
+	"DocumentController.CheckPassword":   "/docs/:key/check-password",
+	"DocumentController.Compare":         "/api/:key/compare/:id",
+	"DocumentController.Content":         "/api/:key/content/:id",
+	"DocumentController.Create":          "/api/:key/create",
+	"DocumentController.Delete":          "/api/:key/delete",
+	"DocumentController.DeleteHistory":   "/history/delete",
+	"DocumentController.DownloadAttachment": "/attach_files/:key/:attach_id",
+	"DocumentController.Edit":            "/api/:key/edit/:id",
+	"DocumentController.Export":          "/export/:key",
+	"DocumentController.History":         "/history/get",
+	"DocumentController.Index":           "/docs/:key",
+	"DocumentController.QrCode":          "/qrcode/:key",
+	"DocumentController.Read":            "/docs/:key/:id",
+	"DocumentController.RemoveAttachment": "/api/attach/remove/",
+	"DocumentController.RestoreHistory":  "/history/restore",
+	"DocumentController.Search":          "/docs/:key/search",
+	"DocumentController.Upload":          "/api/upload",
+	"HomeController.Index":               "/",
+	"ItemsetsController.Index":           "/items",
+	"ItemsetsController.List":            "/items/:key",
+	"LabelController.Index":             "/tag/:key",
+	"LabelController.List":              "/tags",
+	"ManagerController.AttachClean":     "/manager/attach/clean",
+	"ManagerController.AttachDelete":    "/manager/attach/delete",
+	"ManagerController.AttachDetailed":  "/manager/attach/detailed/:id",
+	"ManagerController.AttachList":      "/manager/attach/list",
+	"ManagerController.Books":           "/manager/books",
+	"ManagerController.ChangeMemberRole": "/manager/member/change-member-role",
+	"ManagerController.Comments":        "/manager/comments",
+	"ManagerController.Config":          "/manager/config",
+	"ManagerController.CreateMember":    "/manager/member/create",
+	"ManagerController.CreateToken":     "/manager/books/token",
+	"ManagerController.DeleteBook":      "/manager/books/delete",
+	"ManagerController.DeleteMember":    "/manager/member/delete",
+	"ManagerController.EditBook":        "/manager/books/edit/:key",
+	"ManagerController.EditMember":      "/manager/users/edit/:id",
+	"ManagerController.Index":           "/manager",
+	"ManagerController.Itemsets":        "/manager/itemsets",
+	"ManagerController.ItemsetsDelete":  "/manager/itemsets/delete",
+	"ManagerController.ItemsetsEdit":    "/manager/itemsets/edit",
+	"ManagerController.LabelDelete":     "/manager/label/delete/:id",
+	"ManagerController.LabelList":       "/manager/label/list",
+	"ManagerController.PrivatelyOwned":  "/manager/books/open",
+	"ManagerController.Setting":         "/manager/setting",
+	"ManagerController.Team":            "/manager/team",
+	"ManagerController.TeamBookAdd":     "/manager/team/book/add",
+	"ManagerController.TeamBookDelete":  "/manager/team/book/delete",
+	"ManagerController.TeamBookList":    "/manager/team/book/list/:id",
+	"ManagerController.TeamChangeMemberRole": "/manager/team/member/change_role",
+	"ManagerController.TeamCreate":      "/manager/team/create",
+	"ManagerController.TeamDelete":      "/manager/team/delete",
+	"ManagerController.TeamEdit":        "/manager/team/edit",
+	"ManagerController.TeamMemberAdd":   "/manager/team/member/add",
+	"ManagerController.TeamMemberDelete": "/manager/team/member/delete",
+	"ManagerController.TeamMemberList":  "/manager/team/member/list/:id",
+	"ManagerController.TeamSearchBook":  "/manager/team/book/search",
+	"ManagerController.TeamSearchMember": "/manager/team/member/search",
+	"ManagerController.Transfer":        "/manager/books/transfer",
+	"ManagerController.UpdateMemberStatus": "/manager/member/update-member-status",
+	"ManagerController.Users":           "/manager/users",
+	"SearchController.Index":            "/search",
+	"SearchController.IndexV2":          "/search-v2",
+	"SearchController.SearchV2":         "/api/search-v2",
+	"SearchController.User":             "/api/search/user/:key",
+	"SettingController.Index":           "/setting",
+	"SettingController.Password":        "/setting/password",
+	"SettingController.Upload":          "/setting/upload",
+	"TemplateController.Add":            "/api/template/add",
+	"TemplateController.Delete":         "/api/template/remove",
+	"TemplateController.Get":            "/api/template/get",
+	"TemplateController.List":           "/api/template/list",
 }
 
 func urlForPath(endpoint string, values ...interface{}) string {
@@ -272,10 +357,18 @@ func urlForPath(endpoint string, values ...interface{}) string {
 		return "/"
 	}
 	result := path
+	var queryParams []string
 	for i := 0; i+1 < len(values); i += 2 {
 		if key, ok := values[i].(string); ok {
-			result = strings.Replace(result, ":"+key, fmt.Sprint(values[i+1]), 1)
+			if strings.HasPrefix(key, ":") {
+				result = strings.Replace(result, key, fmt.Sprint(values[i+1]), 1)
+			} else {
+				queryParams = append(queryParams, url.QueryEscape(key)+"="+url.QueryEscape(fmt.Sprint(values[i+1])))
+			}
 		}
+	}
+	if len(queryParams) > 0 {
+		result += "?" + strings.Join(queryParams, "&")
 	}
 	return result
 }

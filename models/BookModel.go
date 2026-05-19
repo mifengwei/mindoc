@@ -17,7 +17,7 @@ import (
 
 	"gorm.io/gorm"
 	"github.com/mindoc-org/mindoc/pkg/logger"
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/utils"
 	"github.com/mindoc-org/mindoc/utils/cryptil"
@@ -78,19 +78,19 @@ type Book struct {
 	//主题风格
 	Theme string `gorm:"column:theme;size:255;default:default" json:"theme"`
 	// CreateTime 创建时间 .
-	CreateTime time.Time `gorm:"type:datetime;column:create_time;autoCreateTime" json:"create_time"`
+	CreateTime time.Time `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	//每个文档保存的历史记录数量，0 为不限制
 	HistoryCount int `gorm:"column:history_count;type:int;default:0" json:"history_count"`
 	//是否启用分享，0启用/1不启用
 	IsEnableShare int       `gorm:"column:is_enable_share;type:int;default:0" json:"is_enable_share"`
 	MemberId      int       `gorm:"column:member_id;size:100" json:"member_id"`
-	ModifyTime    time.Time `gorm:"type:datetime;column:modify_time;autoUpdateTime" json:"modify_time"`
+	ModifyTime    time.Time `gorm:"column:modify_time;autoUpdateTime" json:"modify_time"`
 	Version       int64     `gorm:"type:bigint;column:version" json:"version"`
 	//是否使用第一篇文章项目为默认首页,0 否/1 是
 	IsUseFirstDocument int `gorm:"column:is_use_first_document;type:int;default:0" json:"is_use_first_document"`
 	//是否开启自动保存：0 否/1 是
-	AutoSave  int `gorm:"column:auto_save;type:tinyint;default:0" json:"auto_save"`
-	PrintSate int `gorm:"column:print_state;type:tinyint;default:1" json:"print_state"`
+	AutoSave  int `gorm:"column:auto_save;default:0" json:"auto_save"`
+	PrintSate int `gorm:"column:print_state;default:1" json:"print_state"`
 }
 
 func (book *Book) String() string {

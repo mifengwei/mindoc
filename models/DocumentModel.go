@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 
 	"fmt"
 	"strconv"
@@ -33,9 +33,9 @@ type Document struct {
 	MarkdownTheme string        `gorm:"size:50;column:markdown_theme;default:theme__light;comment:markdown主题" json:"markdown_theme"`
 	Release       string        `gorm:"type:text;column:release;comment:文章内容" json:"release"` // Release 发布后的Html格式内容.
 	Content       string        `gorm:"type:text;column:content;comment:文章内容" json:"content"` // Content 未发布的 Html 格式内容.
-	CreateTime    time.Time     `gorm:"type:datetime;autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`
+	CreateTime    time.Time     `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`
 	MemberId      int           `gorm:"type:int;column:member_id;comment:关系用户id" json:"member_id"`
-	ModifyTime    time.Time     `gorm:"type:datetime;autoUpdateTime;column:modify_time;comment:修改时间" json:"modify_time"`
+	ModifyTime    time.Time     `gorm:"autoUpdateTime;column:modify_time;comment:修改时间" json:"modify_time"`
 	ModifyAt      int           `gorm:"type:int;column:modify_at;comment:修改人id" json:"-"`
 	Version       int64         `gorm:"type:bigint;column:version;comment:版本，关联历史文档里的version" json:"version"`
 	IsOpen        int           `gorm:"type:int;column:is_open;default:0;comment:是否展开子目录 0：阅读时关闭节点 1：阅读时展开节点 2：空目录 单击时会展开下级节点" json:"is_open"` //是否展开子目录：0 否/1 是 /2 空间节点，单击时展开下一级

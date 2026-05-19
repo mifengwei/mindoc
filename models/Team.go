@@ -16,7 +16,7 @@ type Team struct {
 	TeamName    string    `gorm:"size:255;column:team_name;comment:团队名称" json:"team_name"`
 	MemberId    int       `gorm:"type:int;column:member_id;comment:创建人id" json:"member_id"`
 	IsDelete    bool      `gorm:"column:is_delete;default:false;comment:是否删除 false：否 true：是" json:"is_delete"`
-	CreateTime  time.Time `gorm:"type:datetime;autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`
+	CreateTime  time.Time `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`
 	MemberCount int       `gorm:"-" json:"member_count"`
 	BookCount   int       `gorm:"-" json:"book_count"`
 	MemberName  string    `gorm:"-" json:"member_name"`

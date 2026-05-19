@@ -11,7 +11,7 @@
         window.katex = { js: "{{cdnjs "/static/katex/katex"}}",css: "{{cdncss "/static/katex/katex"}}"};
         window.editormdLib = "{{cdnjs "/static/editor.md/lib/"}}";
         window.editor = null;
-        window.editURL = "{{urlfor "BlogController.ManageEdit" "blogId" .Model.BlogId}}";
+        window.editURL = "{{urlfor "BlogController.ManageEdit"}}/{{.Model.BlogId}}";
         window.imageUploadURL = "{{urlfor "BlogController.Upload" "blogId" .Model.BlogId}}";
         window.fileUploadURL = "";
         window.blogId = {{.Model.BlogId}};

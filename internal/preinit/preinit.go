@@ -1,11 +1,6 @@
-// Package preinit performs os.Chdir to the executable's directory before any
-// other package (including beego) initialises. This prevents beego's config
-// init() from printing a spurious "open conf/app.conf: no such file" debug
-// message when the binary is launched from a directory other than its own.
-//
-// Import this package as the very first blank import in main.go:
-//
-//	_ "github.com/mindoc-org/mindoc/internal/preinit"
+// Package preinit performs os.Chdir to the executable's directory before
+// other packages initialise, ensuring config files are found regardless
+// of the working directory the binary is launched from.
 package preinit
 
 import (
@@ -20,11 +15,9 @@ func init() {
 		return
 	}
 	exeDir := filepath.Dir(exe)
-	// Skip go-run temporary build directories.
 	if strings.Contains(exeDir, "go-build") {
 		return
 	}
-	// Only chdir when conf/app.conf actually exists next to the binary.
 	if _, err := os.Stat(filepath.Join(exeDir, "conf", "app.conf")); err != nil {
 		return
 	}

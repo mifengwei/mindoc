@@ -42,7 +42,7 @@ func (c *ItemsetsController) Index() {
 	}
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, pageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, pageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -55,7 +55,7 @@ func (c *ItemsetsController) List() {
 	c.Prepare()
 	c.TplName = "items/list.tpl"
 	pageSize := 18
-	itemKey := c.Ctx.Input.Param(":key")
+	itemKey := c.Gin.Param("key")
 	pageIndex, _ := c.GetInt("page", 1)
 
 	if itemKey == "" {
@@ -81,7 +81,7 @@ func (c *ItemsetsController) List() {
 		c.ShowErrorPage(500, "查询文档列表时出错")
 	}
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, pageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, pageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""

@@ -19,7 +19,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/mindoc-org/mindoc/pkg/logger"
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/lifei6671/gocaptcha"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/mail"
@@ -48,7 +48,7 @@ func (c *AccountController) referer() string {
 }
 
 func (c *AccountController) IsInWorkWeixin() bool {
-	ua := c.Ctx.Input.UserAgent()
+	ua := c.Gin.GetHeader("User-Agent")
 	var wechatRule = regexp.MustCompile(`\bMicroMessenger\/\d+(\.\d+)*\b`)
 	var wxworkRule = regexp.MustCompile(`\bwxwork\/\d+(\.\d+)*\b`)
 	return wechatRule.MatchString(ua) && wxworkRule.MatchString(ua)
@@ -65,13 +65,13 @@ func (c *AccountController) Prepare() {
 	if !c.EnableXSRF {
 		return
 	}
-	if c.Ctx.Input.IsPost() {
-		token := c.Ctx.Input.Query("_xsrf")
+	if c.IsPost() {
+		token := c.Gin.Query("_xsrf")
 		if token == "" {
-			token = c.Ctx.Request.Header.Get("X-Xsrftoken")
+			token = c.Gin.Request.Header.Get("X-Xsrftoken")
 		}
 		if token == "" {
-			token = c.Ctx.Request.Header.Get("X-Csrftoken")
+			token = c.Gin.Request.Header.Get("X-Csrftoken")
 		}
 		if token == "" {
 			if c.IsAjax() {
@@ -98,7 +98,7 @@ func (c *AccountController) Login() {
 	if member, ok := c.GetSession(conf.LoginSessionName).(models.Member); ok && member.MemberId > 0 {
 		u := c.GetString("url")
 		if u == "" {
-			u = c.Ctx.Request.Header.Get("Referer")
+			u = c.Gin.Request.Header.Get("Referer")
 		}
 		if u == "" {
 			u = conf.URLFor("HomeController.Index")
@@ -117,7 +117,7 @@ func (c *AccountController) Login() {
 		}
 	}
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		account := c.GetString("account")
 		password := c.GetString("password")
 		captcha := c.GetString("code")
@@ -199,7 +199,7 @@ Auth2.0 第三方对接思路:
 */
 
 func (c *AccountController) getAuth2Client() (auth2.Client, error) {
-	app := c.Ctx.Input.Param(":app")
+	app := c.Gin.Param("app")
 	var client auth2.Client
 	tokenKey := AccessTokenCacheKey + "-" + app
 
@@ -253,7 +253,7 @@ func (c *AccountController) getAuth2Client() (auth2.Client, error) {
 }
 
 func (c *AccountController) parseAuth2CallbackParam() (code, state string) {
-	switch c.Ctx.Input.Param(":app") {
+	switch c.Gin.Param("app") {
 	case wecom.AppName:
 		code = c.GetString("code")
 		state = c.GetString("state")
@@ -268,7 +268,7 @@ func (c *AccountController) parseAuth2CallbackParam() (code, state string) {
 }
 
 func (c *AccountController) getAuth2Account() (models.Auth2Account, error) {
-	switch c.Ctx.Input.Param(":app") {
+	switch c.Gin.Param("app") {
 	case wecom.AppName:
 		return models.NewWorkWeixinAccount(), nil
 
@@ -290,7 +290,7 @@ func (c *AccountController) Auth2Redirect() {
 		return
 	}
 
-	app := c.Ctx.Input.Param(":app")
+	app := c.Gin.Param("app")
 	var isAppBrowser bool
 	switch app {
 	case wecom.AppName:
@@ -330,7 +330,7 @@ func (c *AccountController) Auth2Callback() {
 	if member, ok := c.GetSession(conf.LoginSessionName).(models.Member); ok && member.MemberId > 0 {
 		u := c.GetString("url")
 		if u == "" {
-			u = c.Ctx.Request.Header.Get("Referer")
+			u = c.Gin.Request.Header.Get("Referer")
 		}
 		if u == "" {
 			u = conf.URLFor("HomeController.Index")
@@ -367,7 +367,7 @@ func (c *AccountController) Auth2Callback() {
 		logger.Debug("bind_existed: ", bindExisted)
 		c.Data["error_msg"] = template.JS(errMsg)
 		c.Data["user_info_json"] = template.JS(userInfoJson)
-		c.Data["app"] = template.JS(c.Ctx.Input.Param(":app"))
+		c.Data["app"] = template.JS(c.Gin.Param("app"))
 	}()
 
 	// 请求参数获取
@@ -519,7 +519,7 @@ func (c *AccountController) Auth2BindAccount() {
 
 // Auth2AutoAccount auth2.0自动创建账号
 func (c *AccountController) Auth2AutoAccount() {
-	app := c.Ctx.Input.Param(":app")
+	app := c.Gin.Param("app")
 	logger.Debug("app: ", app)
 
 	userInfo, ok := c.GetSession(SessionUserInfoKey).(auth2.UserInfo)
@@ -663,12 +663,12 @@ func (c *AccountController) Auth2AutoAccount() {
 
 // WorkWeixinLogin 用户企业微信登录
 //func (c *AccountController) WorkWeixinLogin() {
-//	logger.Info("UserAgent: ", c.Ctx.Input.UserAgent()) // debug
+//	logger.Info("UserAgent: ", c.Gin.GetHeader("User-Agent")) // debug
 //
 //	if member, ok := c.GetSession(conf.LoginSessionName).(models.Member); ok && member.MemberId > 0 {
 //		u := c.GetString("url")
 //		if u == "" {
-//			u = c.Ctx.Request.Header.Get("Referer")
+//			u = c.Gin.Request.Header.Get("Referer")
 //			if u == "" {
 //				u = conf.URLFor("HomeController.Index")
 //			}
@@ -696,7 +696,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //		}
 //	}
 //
-//	if c.Ctx.Input.IsPost() {
+//	if c.IsPost() {
 //		// account := c.GetString("account")
 //		// password := c.GetString("password")
 //		// captcha := c.GetString("code")
@@ -765,7 +765,7 @@ func (c *AccountController) Auth2AutoAccount() {
 //	if member, ok := c.GetSession(conf.LoginSessionName).(models.Member); ok && member.MemberId > 0 {
 //		u := c.GetString("url")
 //		if u == "" {
-//			u = c.Ctx.Request.Header.Get("Referer")
+//			u = c.Gin.Request.Header.Get("Referer")
 //		}
 //		if u == "" {
 //			u = conf.URLFor("HomeController.Index")
@@ -1049,7 +1049,7 @@ func (c *AccountController) Auth2AutoAccount() {
 
 // QR二维码登录
 //func (c *AccountController) QRLogin() {
-//	appName := c.Ctx.Input.Param(":app")
+//	appName := c.Gin.Param("app")
 //
 //	switch appName {
 //	// 钉钉扫码登录
@@ -1152,7 +1152,7 @@ func (c *AccountController) Register() {
 		c.Abort("404")
 	}
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		account := c.GetString("account")
 		password1 := c.GetString("password1")
 		password2 := c.GetString("password2")
@@ -1205,7 +1205,7 @@ func (c *AccountController) FindPassword() {
 	c.TplName = "account/find_password_setp1.tpl"
 	mailConf := conf.GetMailConfig()
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 
 		email := c.GetString("email")
 		captcha := c.GetString("code")
@@ -1413,7 +1413,7 @@ func (c *AccountController) ValidEmail() {
 func (c *AccountController) Logout() {
 	c.SetMember(models.Member{})
 	c.SetSecureCookie(conf.GetAppKey(), "login", "", -3600)
-	u := c.Ctx.Request.Header.Get("Referer")
+	u := c.Gin.Request.Header.Get("Referer")
 	c.Redirect(conf.URLFor("AccountController.Login", "url", u), 302)
 }
 
@@ -1433,6 +1433,6 @@ func (c *AccountController) Captcha() {
 	captchaImage.DrawBorder(gocaptcha.ColorToRGB(0x17A7A7A))
 	// captchaImage.DrawHollowLine()
 
-	captchaImage.SaveImage(c.Ctx.ResponseWriter, gocaptcha.ImageFormatJpeg)
+	captchaImage.SaveImage(c.Gin.Writer, gocaptcha.ImageFormatJpeg)
 	c.StopRun()
 }

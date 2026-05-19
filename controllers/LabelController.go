@@ -29,7 +29,7 @@ func (c *LabelController) Index() {
 	c.Prepare()
 	c.TplName = "label/index.tpl"
 
-	labelName := c.Ctx.Input.Param(":key")
+	labelName := c.Gin.Param("key")
 	pageIndex, _ := c.GetInt("page", 1)
 	if labelName == "" {
 		c.Abort("404")
@@ -55,7 +55,7 @@ func (c *LabelController) Index() {
 		c.ShowErrorPage(500, "查询文档列表时出错")
 	}
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -78,7 +78,7 @@ func (c *LabelController) List() {
 		c.ShowErrorPage(500, err.Error())
 	}
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""

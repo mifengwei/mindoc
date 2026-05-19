@@ -19,8 +19,8 @@ type Itemsets struct {
 	ItemKey     string    `gorm:"column:item_key;size:100;uniqueIndex;description:项目空间标识" json:"item_key"`
 	Description string    `gorm:"column:description;type:text;description:描述" json:"description"`
 	MemberId    int       `gorm:"column:member_id;size:100;description:所属用户" json:"member_id"`
-	CreateTime  time.Time `gorm:"column:create_time;type:datetime;autoCreateTime;description:创建时间" json:"create_time"`
-	ModifyTime  time.Time `gorm:"column:modify_time;type:datetime;autoUpdateTime;description:修改时间" json:"modify_time"`
+	CreateTime  time.Time `gorm:"column:create_time;autoCreateTime;description:创建时间" json:"create_time"`
+	ModifyTime  time.Time `gorm:"column:modify_time;autoUpdateTime;description:修改时间" json:"modify_time"`
 	ModifyAt    int       `gorm:"column:modify_at;type:int;description:修改人id" json:"modify_at"`
 
 	BookNumber       int    `gorm:"-" json:"book_number"`

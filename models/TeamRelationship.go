@@ -13,7 +13,7 @@ type TeamRelationship struct {
 	TeamRelationshipId int       `gorm:"primaryKey;autoIncrement;column:team_relationship_id;uniqueIndex" json:"team_relationship_id"`
 	BookId             int       `gorm:"column:book_id;comment:项目id" json:"book_id"`
 	TeamId             int       `gorm:"column:team_id;comment:团队id" json:"team_id"`
-	CreateTime         time.Time `gorm:"type:datetime;autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`
+	CreateTime         time.Time `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`
 	TeamName           string    `gorm:"-" json:"team_name"`
 	MemberCount        int       `gorm:"-" json:"member_count"`
 	BookMemberId       int       `gorm:"-" json:"book_member_id"`

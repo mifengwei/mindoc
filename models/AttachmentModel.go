@@ -24,7 +24,7 @@ type Attachment struct {
 	FileSize     float64   `gorm:"column:file_size;type:float" json:"file_size"`
 	HttpPath     string    `gorm:"column:http_path;size:2000" json:"http_path"`
 	FileExt      string    `gorm:"column:file_ext;size:50" json:"file_ext"`
-	CreateTime   time.Time `gorm:"type:datetime;column:create_time;autoCreateTime" json:"create_time"`
+	CreateTime   time.Time `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	CreateAt     int       `gorm:"column:create_at;type:int" json:"create_at"`
 	ResourceType string    `gorm:"-" json:"resource_type"`
 }

@@ -13,7 +13,7 @@ type MemberToken struct {
 	Email     string    `gorm:"column:email;size:255" json:"email"`
 	IsValid   bool      `gorm:"column:is_valid" json:"is_valid"`
 	ValidTime time.Time `gorm:"column:valid_time" json:"valid_time"`
-	SendTime  time.Time `gorm:"column:send_time;type:datetime;autoCreateTime" json:"send_time"`
+	SendTime  time.Time `gorm:"column:send_time;autoCreateTime" json:"send_time"`
 }
 
 // TableName 获取对应数据库表名.

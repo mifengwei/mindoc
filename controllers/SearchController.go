@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/mindoc-org/mindoc/pkg/logger"
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
 	"github.com/mindoc-org/mindoc/utils"
@@ -470,7 +470,7 @@ func (c *SearchController) Index() {
 			return
 		}
 		if totalCount > 0 {
-			pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+			pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 			c.Data["PageHtml"] = pager.HtmlPages()
 		} else {
 			c.Data["PageHtml"] = ""
@@ -509,7 +509,7 @@ func (c *SearchController) Index() {
 // 搜索用户
 func (c *SearchController) User() {
 	c.Prepare()
-	key := c.Ctx.Input.Param(":key")
+	key := c.Gin.Param("key")
 	keyword := strings.TrimSpace(c.GetString("q"))
 	if key == "" || keyword == "" {
 		c.JsonResult(404, i18n.Tr(c.Lang, "message.param_error"))
@@ -572,7 +572,7 @@ func (c *SearchController) IndexV2() {
 			return
 		}
 		if totalCount > 0 {
-			pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+			pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 			c.Data["PageHtml"] = pager.HtmlPages()
 		} else {
 			c.Data["PageHtml"] = ""

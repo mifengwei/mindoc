@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/mindoc-org/mindoc/utils/sqltil"
 
 	"net/http"
@@ -52,7 +51,7 @@ func (c *BookController) Index() {
 	}
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -74,7 +73,7 @@ func (c *BookController) Dashboard() {
 	c.Prepare()
 	c.TplName = "book/dashboard.tpl"
 
-	key := c.Ctx.Input.Param(":key")
+	key := c.Gin.Param("key")
 
 	if key == "" {
 		c.Abort("404")
@@ -98,7 +97,7 @@ func (c *BookController) Setting() {
 	c.Prepare()
 	c.TplName = "book/setting.tpl"
 
-	key := c.Ctx.Input.Param(":key")
+	key := c.Gin.Param("key")
 
 	if key == "" {
 		c.Abort("404")
@@ -416,7 +415,7 @@ func (c *BookController) Users() {
 	c.Prepare()
 	c.TplName = "book/users.tpl"
 
-	key := c.Ctx.Input.Param(":key")
+	key := c.Gin.Param("key")
 	pageIndex, _ := c.GetInt("page", 1)
 
 	if key == "" {
@@ -440,7 +439,7 @@ func (c *BookController) Users() {
 	members, totalCount, err := models.NewMemberRelationshipResult().FindForUsersByBookId(c.Lang, book.BookId, pageIndex, conf.PageSize)
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -457,7 +456,7 @@ func (c *BookController) Users() {
 // Create 创建项目.
 func (c *BookController) Create() {
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		bookName := strings.TrimSpace(c.GetString("book_name", ""))
 		identify := strings.TrimSpace(c.GetString("identify", ""))
 		description := strings.TrimSpace(c.GetString("description", ""))
@@ -564,7 +563,7 @@ func (c *BookController) Create() {
 
 // 复制项目
 func (c *BookController) Copy() {
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		//检查是否有复制项目的权限
 		if _, err := c.IsPermission(); err != nil {
 			c.JsonResult(500, err.Error())
@@ -637,7 +636,7 @@ func (c *BookController) Import() {
 		c.JsonResult(6006, i18n.Tr(c.Lang, "message.project_id_existed"))
 	}
 
-	tempPath := filepath.Join(os.TempDir(), c.CruSession.SessionID(context.TODO()))
+	tempPath := filepath.Join(os.TempDir(), c.SessionID())
 
 	os.MkdirAll(tempPath, 0766)
 
@@ -825,7 +824,7 @@ func (c *BookController) UpdateBookOrder() {
 func (c *BookController) SaveSort() {
 	c.Prepare()
 
-	identify := c.Ctx.Input.Param(":key")
+	identify := c.Gin.Param("key")
 	if identify == "" {
 		c.Abort("404")
 	}
@@ -851,7 +850,7 @@ func (c *BookController) SaveSort() {
 		bookId = bookResult.BookId
 	}
 
-	content := c.Ctx.Input.RequestBody
+	content := c.GetRequestBody()
 
 	var docs []map[string]interface{}
 
@@ -906,7 +905,7 @@ func (c *BookController) Team() {
 	c.Prepare()
 	c.TplName = "book/team.tpl"
 
-	key := c.Ctx.Input.Param(":key")
+	key := c.Gin.Param("key")
 	pageIndex, _ := c.GetInt("page", 1)
 
 	if key == "" {
@@ -930,7 +929,7 @@ func (c *BookController) Team() {
 	members, totalCount, err := models.NewTeamRelationship().FindByBookToPager(book.BookId, pageIndex, conf.PageSize)
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""

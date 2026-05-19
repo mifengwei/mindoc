@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -19,7 +18,7 @@ import (
 
 	"gorm.io/gorm"
 	"github.com/mindoc-org/mindoc/pkg/logger"
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/boombuler/barcode"
 	"github.com/boombuler/barcode/qr"
 	"github.com/mindoc-org/mindoc/conf"
@@ -51,7 +50,7 @@ type DocumentTreeFlatten struct {
 func (c *DocumentController) Index() {
 	c.Prepare()
 
-	identify := c.Ctx.Input.Param(":key")
+	identify := c.Gin.Param("key")
 	token := c.GetString("token")
 
 	if identify == "" {
@@ -115,7 +114,7 @@ func (c *DocumentController) Index() {
 // CheckPassword : Handles password verification for private documents,
 // and front-end requests are made through Ajax.
 func (c *DocumentController) CheckPassword() {
-	identify := c.Ctx.Input.Param(":key")
+	identify := c.Gin.Param("key")
 	password := c.GetString("bPassword")
 
 	if identify == "" || password == "" {
@@ -125,7 +124,7 @@ func (c *DocumentController) CheckPassword() {
 	// You have not logged in and need to log in again.
 	if !c.EnableAnonymous && !c.isUserLoggedIn() {
 		logger.Info("You have not logged in and need to log in again(SessionId: %s).",
-			c.CruSession.SessionID(context.TODO()))
+			c.SessionID())
 		c.JsonResult(6000, i18n.Tr(c.Lang, "message.need_relogin"))
 		return
 	}
@@ -147,7 +146,7 @@ func (c *DocumentController) CheckPassword() {
 
 // 阅读文档
 func (c *DocumentController) Read() {
-	identify := c.Ctx.Input.Param(":key")
+	identify := c.Gin.Param("key")
 	token := c.GetString("token")
 	id := c.GetString(":id")
 
@@ -359,7 +358,7 @@ func (c *DocumentController) Edit() {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.no_permission"))
 	}
 
-	identify := c.Ctx.Input.Param(":key")
+	identify := c.Gin.Param("key")
 	if identify == "" {
 		c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.project_id_error"))
 	}
@@ -425,7 +424,7 @@ func (c *DocumentController) Edit() {
 	}
 
 	selectedDocId := 0
-	if doc, err := c.resolveEditDocument(bookResult.BookId, c.Ctx.Input.Param(":id")); err != nil {
+	if doc, err := c.resolveEditDocument(bookResult.BookId, c.Gin.Param("id")); err != nil {
 		if err == gorm.ErrRecordNotFound || err == models.ErrDataNotExist {
 			c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.doc_not_exist"))
 		} else {
@@ -713,9 +712,9 @@ func (c *DocumentController) Upload() {
 	}
 	if len(files) == 1 {
 		// froala单文件上传
-		c.Ctx.Output.JSON(result, true, false)
+		c.Gin.JSON(http.StatusOK, result)
 	} else {
-		c.Ctx.Output.JSON(result2, true, false)
+		c.Gin.JSON(http.StatusOK, result2)
 	}
 	c.StopRun()
 }
@@ -724,8 +723,8 @@ func (c *DocumentController) Upload() {
 func (c *DocumentController) DownloadAttachment() {
 	c.Prepare()
 
-	identify := c.Ctx.Input.Param(":key")
-	attachId, _ := strconv.Atoi(c.Ctx.Input.Param(":attach_id"))
+	identify := c.Gin.Param("key")
+	attachId, _ := strconv.Atoi(c.Gin.Param("attach_id"))
 	token := c.GetString("token")
 
 	memberId := 0
@@ -780,7 +779,7 @@ func (c *DocumentController) DownloadAttachment() {
 		c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.attachment_not_exist"))
 	}
 
-	c.Ctx.Output.Download(filepath.Join(conf.WorkingDirectory, attachment.FilePath), attachment.FileName)
+	c.Gin.FileAttachment(filepath.Join(conf.WorkingDirectory, attachment.FilePath), attachment.FileName)
 	c.StopRun()
 }
 
@@ -889,11 +888,11 @@ func (c *DocumentController) Delete() {
 func (c *DocumentController) Content() {
 	c.Prepare()
 
-	identify := c.Ctx.Input.Param(":key")
+	identify := c.Gin.Param("key")
 	docId, err := c.GetInt("doc_id")
 
 	if err != nil {
-		docId, _ = strconv.Atoi(c.Ctx.Input.Param(":id"))
+		docId, _ = strconv.Atoi(c.Gin.Param("id"))
 	}
 
 	bookId := 0
@@ -925,7 +924,7 @@ func (c *DocumentController) Content() {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
 	}
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		markdown := strings.TrimSpace(c.GetString("markdown", ""))
 		content := c.GetString("html")
 		markdownTheme := c.GetString("markdown_theme", "theme__light")
@@ -1018,7 +1017,7 @@ func (c *DocumentController) Content() {
 func (c *DocumentController) Export() {
 	c.Prepare()
 
-	identify := c.Ctx.Input.Param(":key")
+	identify := c.Gin.Param("key")
 
 	if identify == "" {
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.param_error"))
@@ -1055,19 +1054,19 @@ func (c *DocumentController) Export() {
 		c.ShowErrorPage(200, i18n.Tr(c.Lang, "message.cur_project_export_func_disable"))
 	}
 
-	if !strings.HasPrefix(bookResult.Cover, "http:://") && !strings.HasPrefix(bookResult.Cover, "https:://") {
+	if !strings.HasPrefix(bookResult.Cover, "http://") && !strings.HasPrefix(bookResult.Cover, "https://") {
 		bookResult.Cover = conf.URLForWithCdnImage(bookResult.Cover)
 	}
 	if output == Markdown {
 		if bookResult.Editor != EditorMarkdown && bookResult.Editor != EditorCherryMarkdown {
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.cur_project_not_support_md"))
 		}
-		p, err := bookResult.ExportMarkdown(c.CruSession.SessionID(context.TODO()))
+		p, err := bookResult.ExportMarkdown(c.SessionID())
 
 		if err != nil {
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.failed"))
 		}
-		c.Ctx.Output.Download(p, bookResult.BookName+".zip")
+		c.Gin.FileAttachment(p, bookResult.BookName+".zip")
 
 		c.StopRun()
 		return
@@ -1081,23 +1080,23 @@ func (c *DocumentController) Export() {
 	docxpath := filepath.Join(outputPath, "book.docx")
 
 	if output == "pdf" && filetil.FileExists(pdfpath) {
-		c.Ctx.Output.Download(pdfpath, bookResult.BookName+".pdf")
+		c.Gin.FileAttachment(pdfpath, bookResult.BookName+".pdf")
 		c.Abort("200")
 	} else if output == "epub" && filetil.FileExists(epubpath) {
-		c.Ctx.Output.Download(epubpath, bookResult.BookName+".epub")
+		c.Gin.FileAttachment(epubpath, bookResult.BookName+".epub")
 
 		c.Abort("200")
 	} else if output == "mobi" && filetil.FileExists(mobipath) {
-		c.Ctx.Output.Download(mobipath, bookResult.BookName+".mobi")
+		c.Gin.FileAttachment(mobipath, bookResult.BookName+".mobi")
 
 		c.Abort("200")
 	} else if output == "docx" && filetil.FileExists(docxpath) {
-		c.Ctx.Output.Download(docxpath, bookResult.BookName+".docx")
+		c.Gin.FileAttachment(docxpath, bookResult.BookName+".docx")
 
 		c.Abort("200")
 
 	} else if output == "pdf" || output == "epub" || output == "docx" || output == "mobi" {
-		if err := models.BackgroundConvert(c.CruSession.SessionID(context.TODO()), bookResult); err != nil && err != gopool.ErrHandlerIsExist {
+		if err := models.BackgroundConvert(c.SessionID(), bookResult); err != nil && err != gopool.ErrHandlerIsExist {
 			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.export_failed"))
 		}
 
@@ -1133,11 +1132,11 @@ func (c *DocumentController) QrCode() {
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.gen_qrcode_failed"))
 	}
 
-	c.Ctx.ResponseWriter.Header().Set("Content-Type", "image/png")
+	c.Gin.Writer.Header().Set("Content-Type", "image/png")
 
 	// imgpath := filepath.Join("cache","qrcode",identify + ".png")
 
-	err = png.Encode(c.Ctx.ResponseWriter, code)
+	err = png.Encode(c.Gin.Writer, code)
 	if err != nil {
 		logger.Error("生成二维码失败 ->", err)
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.gen_qrcode_failed"))
@@ -1148,7 +1147,7 @@ func (c *DocumentController) QrCode() {
 func (c *DocumentController) Search() {
 	c.Prepare()
 
-	identify := c.Ctx.Input.Param(":key")
+	identify := c.Gin.Param("key")
 	token := c.GetString("token")
 	keyword := strings.TrimSpace(c.GetString("keyword"))
 
@@ -1248,7 +1247,7 @@ func (c *DocumentController) History() {
 	c.Data["Document"] = doc
 
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	}
 }
@@ -1374,8 +1373,8 @@ func (c *DocumentController) Compare() {
 
 	c.TplName = "document/compare.tpl"
 
-	historyId, _ := strconv.Atoi(c.Ctx.Input.Param(":id"))
-	identify := c.Ctx.Input.Param(":key")
+	historyId, _ := strconv.Atoi(c.Gin.Param("id"))
+	identify := c.Gin.Param("key")
 
 	bookId := 0
 	editor := EditorMarkdown
@@ -1509,12 +1508,12 @@ func (c *DocumentController) isReadable(identify, token string) *models.BookResu
 }
 
 func promptUserToLogIn(c *DocumentController) {
-	logger.Info("Access " + c.Ctx.Request.URL.RequestURI() + " not permitted.")
-	logger.Info("  Access will be redirected to login page(SessionId: " + c.CruSession.SessionID(context.TODO()) + ").")
+	logger.Info("Access " + c.Gin.Request.URL.RequestURI() + " not permitted.")
+	logger.Info("  Access will be redirected to login page(SessionId: " + c.SessionID() + ").")
 
 	if c.IsAjax() {
 		c.JsonResult(6000, i18n.Tr(c.Lang, "message.need_relogin"))
 	} else {
-		c.Redirect(conf.URLFor("AccountController.Login")+"?url="+url.PathEscape(conf.BaseUrl+c.Ctx.Request.URL.RequestURI()), 302)
+		c.Redirect(conf.URLFor("AccountController.Login")+"?url="+url.PathEscape(conf.BaseUrl+c.Gin.Request.URL.RequestURI()), 302)
 	}
 }

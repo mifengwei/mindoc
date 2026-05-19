@@ -52,7 +52,7 @@ func (c *CommentController) Create() {
 		m.Author = c.Member.Account
 	}
 	m.MemberId = c.Member.MemberId
-	m.IPAddress = c.Ctx.Request.RemoteAddr
+	m.IPAddress = c.Gin.Request.RemoteAddr
 	m.IPAddress = strings.Split(m.IPAddress, ":")[0]
 	m.CommentDate = time.Now()
 	m.Content = content
@@ -72,7 +72,7 @@ func (c *CommentController) Index() {
 }
 
 func (c *CommentController) Delete() {
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		id, _ := c.GetInt("id", 0)
 		m, err := models.NewComment().Find(id)
 		if err != nil {

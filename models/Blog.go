@@ -48,12 +48,12 @@ type Blog struct {
 	//文章密码，varchar(100)值。文章编辑才可为文章设定一个密码，凭这个密码才能对文章进行重新强加或修改。
 	Password string `gorm:"column:password;size:100" json:"-"`
 	//最后修改时间
-	Modified time.Time `gorm:"column:modify_time;type:datetime;autoUpdateTime" json:"modify_time"`
+	Modified time.Time `gorm:"column:modify_time;autoUpdateTime" json:"modify_time"`
 	//修改人id
 	ModifyAt       int    `gorm:"column:modify_at;type:int" json:"-"`
 	ModifyRealName string `gorm:"-" json:"modify_real_name"`
 	//创建时间
-	Created    time.Time `gorm:"column:create_time;type:datetime;autoCreateTime" json:"create_time"`
+	Created    time.Time `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	CreateName string    `gorm:"-" json:"create_name"`
 	//版本号
 	Version int64 `gorm:"type:bigint;column:version" json:"version"`

@@ -87,7 +87,7 @@
                 <div class="item">{{i18n .Lang "blog.modified_on"}}</div>
                 <div class="item">{{date_format .Model.Modified "2006-01-02 15:04:05"}}</div>
                 {{if eq .Member.MemberId .Model.MemberId}}
-                    <div class="item"><a href='{{urlfor "BlogController.ManageEdit" ":id" .Model.BlogId}}' title="{{i18n .Lang "blog.edit_blog"}}"><i class="fa fa-edit"></i> {{i18n .Lang "common.edit"}}</a></div>
+                    <div class="item"><a href='{{urlfor "BlogController.ManageEdit"}}/{{.Model.BlogId}}' title="{{i18n .Lang "blog.edit_blog"}}"><i class="fa fa-edit"></i> {{i18n .Lang "common.edit"}}</a></div>
                 {{end}}
             </div>
         </div>

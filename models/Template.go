@@ -17,9 +17,9 @@ type Template struct {
 	//是否是全局模板：0 否/1 是; 全局模板在所有项目中都可以使用；否则只能在创建模板的项目中使用
 	IsGlobal        int       `gorm:"column:is_global;default:0" json:"is_global"`
 	TemplateContent string    `gorm:"column:template_content;type:text" json:"template_content"`
-	CreateTime      time.Time `gorm:"column:create_time;type:datetime;autoCreateTime" json:"create_time"`
+	CreateTime      time.Time `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	CreateName      string    `gorm:"-" json:"create_name"`
-	ModifyTime      time.Time `gorm:"column:modify_time;type:datetime;autoUpdateTime" json:"modify_time"`
+	ModifyTime      time.Time `gorm:"column:modify_time;autoUpdateTime" json:"modify_time"`
 	ModifyAt        int       `gorm:"column:modify_at;type:int" json:"-"`
 	ModifyName      string    `gorm:"-" json:"modify_name"`
 	Version         int64     `gorm:"type:bigint;column:version" json:"version"`

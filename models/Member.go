@@ -21,7 +21,7 @@ import (
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/pkg/logger"
 	"github.com/mindoc-org/mindoc/utils"
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"gorm.io/gorm"
 )
 
@@ -39,12 +39,12 @@ type Member struct {
 	Phone       string `gorm:"size:255;column:phone;default:null" json:"phone"`
 	Avatar      string `gorm:"size:1000;column:avatar" json:"avatar"`
 	//用户角色：0 超级管理员 /1 管理员/ 2 普通用户/ 3 只读用户 .
-	Role          conf.SystemRole `gorm:"column:role;type:int;default:1;index" json:"role"`
+	Role          conf.SystemRole `gorm:"column:role;type:int;index" json:"role"`
 	RoleName      string          `gorm:"-" json:"role_name"`
 	Status        int             `gorm:"column:status;type:int;default:0" json:"status"` //用户状态：0 正常/1 禁用
-	CreateTime    time.Time       `gorm:"type:datetime;column:create_time;autoCreateTime" json:"create_time"`
+	CreateTime    time.Time       `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	CreateAt      int             `gorm:"type:int;column:create_at" json:"create_at"`
-	LastLoginTime time.Time       `gorm:"type:datetime;column:last_login_time;default:null" json:"last_login_time"`
+	LastLoginTime time.Time       `gorm:"column:last_login_time;default:null" json:"last_login_time"`
 	//i18n
 	Lang string `gorm:"-"`
 }

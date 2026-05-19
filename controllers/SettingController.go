@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/mindoc-org/mindoc/pkg/logger"
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/graphics"
 	"github.com/mindoc-org/mindoc/models"
@@ -23,7 +23,7 @@ type SettingController struct {
 func (c *SettingController) Index() {
 	c.TplName = "setting/index.tpl"
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		email := strings.TrimSpace(c.GetString("email", ""))
 		phone := strings.TrimSpace(c.GetString("phone"))
 		description := strings.TrimSpace(c.GetString("description"))
@@ -47,7 +47,7 @@ func (c *SettingController) Index() {
 func (c *SettingController) Password() {
 	c.TplName = "setting/password.tpl"
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		if c.Member.AuthMethod == conf.AuthMethodLDAP {
 			c.JsonResult(6009, i18n.Tr(c.Lang, "message.cur_user_cannot_change_pwd"))
 		}

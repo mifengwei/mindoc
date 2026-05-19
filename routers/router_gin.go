@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/beego/i18n"
-	"github.com/gin-contrib/multitemplate"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/controllers"
@@ -134,143 +134,6 @@ func showErrorPage(c *gin.Context, code int, msg string) {
 	c.Abort()
 }
 
-func createRenderer() multitemplate.Renderer {
-	r := multitemplate.NewRenderer()
-	viewsPath := conf.WorkingDir("views")
-
-	// 遍历 views 目录注册所有模板
-	// 使用基础模板 template.tpl 作为 layout
-	baseTpl := filepath.Join(viewsPath, "template.tpl")
-
-	// 获取所有模板目录
-	dirs, err := os.ReadDir(viewsPath)
-	if err != nil {
-		logger.Error("读取模板目录失败 ->", err)
-		return r
-	}
-
-	for _, dir := range dirs {
-		if !dir.IsDir() {
-			continue
-		}
-		dirName := dir.Name()
-		dirPath := filepath.Join(viewsPath, dirName)
-
-		files, err := os.ReadDir(dirPath)
-		if err != nil {
-			continue
-		}
-
-		for _, f := range files {
-			if f.IsDir() || !strings.HasSuffix(f.Name(), ".tpl") {
-				continue
-			}
-			tplName := dirName + "/" + f.Name()
-			tplPath := filepath.Join(dirPath, f.Name())
-			logger.Debug("Registering template:", tplName, "->", tplPath)
-
-			// 读取模板文件内容
-			content, err := os.ReadFile(tplPath)
-			if err != nil {
-				continue
-			}
-
-			// 检查是否引用了 template.tpl
-			contentStr := string(content)
-			if strings.Contains(contentStr, "template.tpl") {
-				r.AddFromFilesFuncs(tplName, template.FuncMap{
-					"config":      models.GetOptionValue,
-					"cdn":          cdnFunc,
-					"cdnjs":        conf.URLForWithCdnJs,
-					"cdncss":       conf.URLForWithCdnCss,
-					"cdnimg":       conf.URLForWithCdnImage,
-					"urlfor":       urlForFunc,
-					"conf":         conf.CONF,
-					"date_format":  func(t time.Time, format string) string { return t.Local().Format(format) },
-					"date":         phpDateFunc,
-					"str":          func(v interface{}) string { return fmt.Sprint(v) },
-					"i18n":         i18n.Tr,
-					"str2html":     func(s string) template.HTML { return template.HTML(s) },
-					"html2str":     HTML2Str,
-					"htmlquote":    Htmlquote,
-					"htmlunquote":  Htmlunquote,
-					"htfn":         Htmlfilter,
-				}, baseTpl, tplPath)
-			} else {
-				r.AddFromFilesFuncs(tplName, template.FuncMap{
-					"config":      models.GetOptionValue,
-					"cdn":          cdnFunc,
-					"cdnjs":        conf.URLForWithCdnJs,
-					"cdncss":       conf.URLForWithCdnCss,
-					"cdnimg":       conf.URLForWithCdnImage,
-					"urlfor":       urlForFunc,
-					"conf":         conf.CONF,
-					"date_format":  func(t time.Time, format string) string { return t.Local().Format(format) },
-					"date":         phpDateFunc,
-					"str":          func(v interface{}) string { return fmt.Sprint(v) },
-					"i18n":         i18n.Tr,
-					"str2html":     func(s string) template.HTML { return template.HTML(s) },
-					"html2str":     HTML2Str,
-					"htmlquote":    Htmlquote,
-					"htmlunquote":  Htmlunquote,
-					"htfn":         Htmlfilter,
-				}, tplPath)
-			}
-		}
-	}
-
-	return r
-}
-
-// setupTemplates 配置模板引擎
-func setupTemplates(r *gin.Engine) {
-	viewsPath := conf.WorkingDir("views")
-
-	funcMap := template.FuncMap{
-		"config":      models.GetOptionValue,
-		"cdn":          cdnFunc,
-		"cdnjs":        conf.URLForWithCdnJs,
-		"cdncss":       conf.URLForWithCdnCss,
-		"cdnimg":       conf.URLForWithCdnImage,
-		"urlfor":       urlForFunc,
-		"conf":         conf.CONF,
-		"date_format":  func(t time.Time, format string) string { return t.Local().Format(format) },
-		"date":         phpDateFunc,
-		"str":          func(v interface{}) string { return fmt.Sprint(v) },
-		"i18n":         i18n.Tr,
-		"str2html":     func(s string) template.HTML { return template.HTML(s) },
-		"html2str":     HTML2Str,
-		"htmlquote":    Htmlquote,
-		"htmlunquote":  Htmlunquote,
-		"htfn":         Htmlfilter,
-	}
-
-	// 收集所有模板文件
-	var tplFiles []string
-	filepath.Walk(viewsPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		if strings.HasSuffix(path, ".tpl") {
-			tplFiles = append(tplFiles, path)
-		}
-		return nil
-	})
-
-	if len(tplFiles) == 0 {
-		logger.Error("未找到任何模板文件 in", viewsPath)
-		return
-	}
-
-	logger.Info("加载", len(tplFiles), "个模板文件")
-
-	tmpl := template.Must(template.New("").Funcs(funcMap).ParseFiles(tplFiles...))
-	r.SetHTMLTemplate(tmpl)
-}
-
-func registerTemplateFunctions(r *gin.Engine) {
-	// 模板函数已通过 createRenderer 注册
-}
 
 // phpDateFunc 兼容 PHP 风格的日期格式
 func phpDateFunc(t time.Time, format string) string {
@@ -312,6 +175,7 @@ func cdnFunc(p string) string {
 var routeNameMap = map[string]string{
 	"AccountController.Auth2AutoAccount": "/auth2/account/auto/:app",
 	"AccountController.Auth2BindAccount": "/auth2/account/bind/:app",
+	"AccountController.Auth2Callback": "/auth2/callback/:app",
 	"AccountController.Auth2Redirect": "/auth2/redirect/:app",
 	"AccountController.Captcha": "/captcha",
 	"AccountController.FindPassword": "/find_password",
@@ -319,8 +183,9 @@ var routeNameMap = map[string]string{
 	"AccountController.Logout": "/logout",
 	"AccountController.Register": "/register",
 	"AccountController.ValidEmail": "/valid_email",
-	"BlogController.Index": "/blog-:id([0-9]+).html",
+	"BlogController.Index": "/blog/:id",
 	"BlogController.List": "/blogs",
+	"BlogController.Download": "/blog/attach/:id/:attach_id",
 	"BlogController.ManageDelete": "/manage/blogs/delete",
 	"BlogController.ManageEdit": "/manage/blogs/edit",
 	"BlogController.ManageList": "/manage/blogs",
@@ -353,6 +218,8 @@ var routeNameMap = map[string]string{
 	"BookMemberController.RemoveMember": "/book/users/delete",
 	"CommentController.Create": "/comment/create",
 	"CommentController.Index": "/comment/index",
+	"CommentController.Delete": "/comment/delete",
+	"CommentController.Lists": "/comment/lists",
 	"DocumentController.CheckPassword": "/docs/:key/check-password",
 	"DocumentController.Compare": "/api/:key/compare/:id",
 	"DocumentController.Content": "/api/:key/content/:id",
@@ -360,7 +227,7 @@ var routeNameMap = map[string]string{
 	"DocumentController.Delete": "/api/:key/delete",
 	"DocumentController.DeleteHistory": "/history/delete",
 	"DocumentController.DownloadAttachment": "/attach_files/:key/:attach_id",
-	"DocumentController.Edit": "/api/:key/edit",
+	"DocumentController.Edit": "/api/:key/edit/:id",
 	"DocumentController.Export": "/export/:key",
 	"DocumentController.History": "/history/get",
 	"DocumentController.Index": "/docs/:key",
@@ -374,6 +241,7 @@ var routeNameMap = map[string]string{
 	"ItemsetsController.Index": "/items",
 	"ItemsetsController.List": "/items/:key",
 	"LabelController.Index": "/tag/:key",
+	"LabelController.List": "/tags",
 	"ManagerController.AttachClean": "/manager/attach/clean",
 	"ManagerController.AttachDelete": "/manager/attach/delete",
 	"ManagerController.AttachDetailed": "/manager/attach/detailed/:id",
@@ -381,7 +249,7 @@ var routeNameMap = map[string]string{
 	"ManagerController.Books": "/manager/books",
 	"ManagerController.ChangeMemberRole": "/manager/member/change-member-role",
 	"ManagerController.Comments": "/manager/comments",
-	"ManagerController.Config": "/manager/setting",
+	"ManagerController.Config": "/manager/config",
 	"ManagerController.CreateMember": "/manager/member/create",
 	"ManagerController.CreateToken": "/manager/books/token",
 	"ManagerController.DeleteBook": "/manager/books/delete",
@@ -431,14 +299,18 @@ func urlForFunc(endpoint string, values ...interface{}) string {
 		return "/"
 	}
 	result := path
+	var queryParams []string
 	for i := 0; i < len(values)-1; i += 2 {
 		if key, ok := values[i].(string); ok {
-			placeholder := key
-			if !strings.HasPrefix(placeholder, ":") {
-				placeholder = ":" + placeholder
+			if strings.HasPrefix(key, ":") {
+				result = strings.Replace(result, key, fmt.Sprint(values[i+1]), 1)
+			} else {
+				queryParams = append(queryParams, url.QueryEscape(key)+"="+url.QueryEscape(fmt.Sprint(values[i+1])))
 			}
-			result = strings.Replace(result, placeholder, fmt.Sprint(values[i+1]), 1)
 		}
+	}
+	if len(queryParams) > 0 {
+		result += "?" + strings.Join(queryParams, "&")
 	}
 	baseUrl := conf.BaseUrl
 	if baseUrl == "" {
@@ -481,8 +353,8 @@ func registerPublicRoutes(r *gin.Engine) {
 
 	// 博客
 	r.GET("/blogs", wrapAny(&controllers.BlogController{}, "List"))
-	r.GET("/blog-:id([0-9]+).html", wrapAny(&controllers.BlogController{}, "Index"))
-		r.POST("/blog-:id([0-9]+).html", wrapAny(&controllers.BlogController{}, "Index"))
+	r.GET("/blog/:id", wrapAny(&controllers.BlogController{}, "Index"))
+		r.POST("/blog/:id", wrapAny(&controllers.BlogController{}, "Index"))
 		r.GET("/blog/attach/:id/:attach_id", wrapAny(&controllers.BlogController{}, "Download"))
 
 	// 搜索

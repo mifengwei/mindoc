@@ -24,7 +24,7 @@ type Logger struct {
 	Content      string    `gorm:"column:content;type:text" json:"content"`
 	OriginalData string    `gorm:"column:original_data;type:text" json:"original_data"`
 	PresentData  string    `gorm:"column:present_data;type:text" json:"present_data"`
-	CreateTime   time.Time `gorm:"type:datetime;column:create_time;autoCreateTime" json:"create_time"`
+	CreateTime   time.Time `gorm:"column:create_time;autoCreateTime" json:"create_time"`
 	UserAgent    string    `gorm:"column:user_agent;size:500" json:"user_agent"`
 	IPAddress    string    `gorm:"column:ip_address;size:255" json:"ip_address"`
 }

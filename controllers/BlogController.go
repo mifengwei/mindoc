@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -15,7 +14,7 @@ import (
 
 	"gorm.io/gorm"
 	"github.com/mindoc-org/mindoc/pkg/logger"
-	"github.com/beego/i18n"
+	"github.com/mindoc-org/mindoc/pkg/i18n"
 	"github.com/mindoc-org/mindoc/conf"
 	"github.com/mindoc-org/mindoc/models"
 	"github.com/mindoc-org/mindoc/utils"
@@ -29,7 +28,7 @@ type BlogController struct {
 func (c *BlogController) Prepare() {
 	c.BaseController.Prepare()
 	if !c.EnableAnonymous && c.Member == nil {
-		c.Redirect(conf.URLFor("AccountController.Login")+"?url="+url.PathEscape(conf.BaseUrl+c.Ctx.Request.URL.RequestURI()), 302)
+		c.Redirect(conf.URLFor("AccountController.Login")+"?url="+url.PathEscape(conf.BaseUrl+c.Gin.Request.URL.RequestURI()), 302)
 	}
 }
 
@@ -37,7 +36,7 @@ func (c *BlogController) Prepare() {
 func (c *BlogController) Index() {
 	c.Prepare()
 	c.TplName = "blog/index.tpl"
-	blogId, _ := strconv.Atoi(c.Ctx.Input.Param(":id"))
+	blogId, _ := strconv.Atoi(c.Gin.Param("id"))
 
 	if blogId <= 0 {
 		c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.page_not_existed"))
@@ -52,18 +51,18 @@ func (c *BlogController) Index() {
 		return
 	}
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		password := c.GetString("password")
 		if blog.BlogStatus == "password" && password != blog.Password {
 			c.JsonResult(6001, i18n.Tr(c.Lang, "message.blog_pwd_incorrect"))
 		} else if blog.BlogStatus == "password" && password == blog.Password {
 			// Store the session value for the next GET request.
-			_ = c.CruSession.Set(context.TODO(), blogReadSession, blogId)
+			c.SetSession(blogReadSession, blogId)
 			c.JsonResult(0, "OK")
 		} else {
 			c.JsonResult(0, "OK")
 		}
-	} else if blog.BlogStatus == "password" && c.CruSession.Get(context.TODO(), blogReadSession) == nil && // Read session doesn't exist
+	} else if blog.BlogStatus == "password" && c.GetSession(blogReadSession) == nil && // Read session doesn't exist
 		(c.Member == nil || (blog.MemberId != c.Member.MemberId && !c.Member.IsAdministrator())) { // User isn't author or administrator
 		//如果不存在已输入密码的标记
 		c.TplName = "blog/index_password.tpl"
@@ -106,7 +105,7 @@ func (c *BlogController) List() {
 		c.ShowErrorPage(500, err.Error())
 	}
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 		for _, blog := range blogList {
 			//如果没有添加文章摘要，则自动提取
@@ -135,7 +134,7 @@ func (c *BlogController) ManageList() {
 		c.ShowErrorPage(500, err.Error())
 	}
 	if totalCount > 0 {
-		pager := pagination.NewPagination(c.Ctx.Request, totalCount, conf.PageSize, c.BaseUrl())
+		pager := pagination.NewPagination(c.Gin.Request, totalCount, conf.PageSize, c.BaseUrl())
 		c.Data["PageHtml"] = pager.HtmlPages()
 	} else {
 		c.Data["PageHtml"] = ""
@@ -150,7 +149,7 @@ func (c *BlogController) ManageSetting() {
 	c.Prepare()
 	c.TplName = "blog/manage_setting.tpl"
 	//如果是post请求
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		blogId, _ := c.GetInt("id", 0)
 		blogTitle := c.GetString("title")
 		blogIdentify := c.GetString("identify")
@@ -265,12 +264,12 @@ func (c *BlogController) ManageSetting() {
 			c.JsonResult(0, "ok", blog)
 		}
 	}
-	if c.Ctx.Input.Referer() == "" {
+	if c.Gin.GetHeader("Referer") == "" {
 		c.Data["Referer"] = "javascript:history.back();"
 	} else {
-		c.Data["Referer"] = c.Ctx.Input.Referer()
+		c.Data["Referer"] = c.Gin.GetHeader("Referer")
 	}
-	blogId, err := strconv.Atoi(c.Ctx.Input.Param(":id"))
+	blogId, err := strconv.Atoi(c.Gin.Param("id"))
 
 	c.Data["DocumentIdentify"] = ""
 	if err == nil {
@@ -294,7 +293,7 @@ func (c *BlogController) ManageEdit() {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.no_permission"))
 	}
 
-	if c.Ctx.Input.IsPost() {
+	if c.IsPost() {
 		blogId, _ := c.GetInt("blogId", 0)
 
 		if blogId <= 0 {
@@ -366,7 +365,7 @@ func (c *BlogController) ManageEdit() {
 		}
 	}
 
-	blogId, _ := strconv.Atoi(c.Ctx.Input.Param(":id"))
+	blogId, _ := strconv.Atoi(c.Gin.Param("id"))
 
 	if blogId <= 0 {
 		c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.param_error"))
@@ -570,7 +569,7 @@ func (c *BlogController) Upload() {
 	result["url"] = httpPath
 	result["alt"] = fileName
 
-	c.Ctx.Output.JSON(result, true, false)
+	c.Gin.JSON(http.StatusOK, result)
 	c.StopRun()
 }
 
@@ -578,7 +577,7 @@ func (c *BlogController) Upload() {
 func (c *BlogController) RemoveAttachment() {
 	c.Prepare()
 	attachId, _ := c.GetInt("attach_id")
-	blogId, _ := strconv.Atoi(c.Ctx.Input.Param(":id"))
+	blogId, _ := strconv.Atoi(c.Gin.Param("id"))
 
 	if attachId <= 0 {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
@@ -627,8 +626,8 @@ func (c *BlogController) RemoveAttachment() {
 func (c *BlogController) Download() {
 	c.Prepare()
 
-	blogId, _ := strconv.Atoi(c.Ctx.Input.Param(":id"))
-	attachId, _ := strconv.Atoi(c.Ctx.Input.Param(":attach_id"))
+	blogId, _ := strconv.Atoi(c.Gin.Param("id"))
+	attachId, _ := strconv.Atoi(c.Gin.Param("attach_id"))
 	password := c.GetString("password")
 
 	blog, err := models.NewBlog().Find(blogId)
@@ -641,7 +640,7 @@ func (c *BlogController) Download() {
 	}
 	blogReadSession := fmt.Sprintf("blog:read:%d", blogId)
 	//如果没有启动匿名访问，或者设置了访问密码
-	if (c.Member == nil && !c.EnableAnonymous) || (blog.BlogStatus == "password" && password != blog.Password && c.CruSession.Get(context.TODO(), blogReadSession) == nil) {
+	if (c.Member == nil && !c.EnableAnonymous) || (blog.BlogStatus == "password" && password != blog.Password && c.GetSession(blogReadSession) == nil) {
 		c.ShowErrorPage(403, i18n.Tr(c.Lang, "message.no_permission"))
 	}
 
@@ -664,6 +663,6 @@ func (c *BlogController) Download() {
 		c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.attachment_not_exist"))
 	}
 
-	c.Ctx.Output.Download(filepath.Join(conf.WorkingDirectory, attachment.FilePath), attachment.FileName)
+	c.Gin.FileAttachment(filepath.Join(conf.WorkingDirectory, attachment.FilePath), attachment.FileName)
 	c.StopRun()
 }

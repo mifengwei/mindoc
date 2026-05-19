@@ -77,8 +77,8 @@ func (p *Option) All() ([]*Option, error) {
 
 func (m *Option) Init() error {
 
-	var dummy Option
-	if DB.Table(m.TableName()).Where("option_name = ?", "ENABLED_REGISTER").First(&dummy).Error != nil {
+	var count int64
+	if DB.Table(m.TableName()).Where("option_name = ?", "ENABLED_REGISTER").Count(&count); count == 0 {
 		option := NewOption()
 		option.OptionValue = "false"
 		option.OptionName = "ENABLED_REGISTER"
@@ -87,7 +87,7 @@ func (m *Option) Init() error {
 			return err
 		}
 	}
-	if DB.Table(m.TableName()).Where("option_name = ?", "ENABLE_DOCUMENT_HISTORY").First(&dummy).Error != nil {
+	if DB.Table(m.TableName()).Where("option_name = ?", "ENABLE_DOCUMENT_HISTORY").Count(&count); count == 0 {
 		option := NewOption()
 		option.OptionValue = "true"
 		option.OptionName = "ENABLE_DOCUMENT_HISTORY"
@@ -96,7 +96,7 @@ func (m *Option) Init() error {
 			return err
 		}
 	}
-	if DB.Table(m.TableName()).Where("option_name = ?", "ENABLED_CAPTCHA").First(&dummy).Error != nil {
+	if DB.Table(m.TableName()).Where("option_name = ?", "ENABLED_CAPTCHA").Count(&count); count == 0 {
 		option := NewOption()
 		option.OptionValue = "true"
 		option.OptionName = "ENABLED_CAPTCHA"
@@ -105,7 +105,7 @@ func (m *Option) Init() error {
 			return err
 		}
 	}
-	if DB.Table(m.TableName()).Where("option_name = ?", "ENABLE_ANONYMOUS").First(&dummy).Error != nil {
+	if DB.Table(m.TableName()).Where("option_name = ?", "ENABLE_ANONYMOUS").Count(&count); count == 0 {
 		option := NewOption()
 		option.OptionValue = "false"
 		option.OptionName = "ENABLE_ANONYMOUS"
@@ -114,7 +114,7 @@ func (m *Option) Init() error {
 			return err
 		}
 	}
-	if DB.Table(m.TableName()).Where("option_name = ?", "SITE_NAME").First(&dummy).Error != nil {
+	if DB.Table(m.TableName()).Where("option_name = ?", "SITE_NAME").Count(&count); count == 0 {
 		option := NewOption()
 		option.OptionValue = "MinDoc文档管理系统"
 		option.OptionName = "SITE_NAME"
@@ -123,7 +123,7 @@ func (m *Option) Init() error {
 			return err
 		}
 	}
-	if DB.Table(m.TableName()).Where("option_name = ?", "site_description").First(&dummy).Error != nil {
+	if DB.Table(m.TableName()).Where("option_name = ?", "site_description").Count(&count); count == 0 {
 		option := NewOption()
 		option.OptionValue = "MinDoc 是一款针对IT团队开发的简单好用的文档管理系统，可以用来储存日常接口文档，数据库字典，手册说明等文档。内置项目管理，用户管理，权限管理等功能，支持Markdown和富文本两种编辑器，能够满足大部分中小团队的文档管理需求。"
 		option.OptionName = "site_description"
@@ -133,7 +133,7 @@ func (m *Option) Init() error {
 		}
 	}
 
-	if DB.Table(m.TableName()).Where("option_name = ?", "site_beian").First(&dummy).Error != nil {
+	if DB.Table(m.TableName()).Where("option_name = ?", "site_beian").Count(&count); count == 0 {
 		option := NewOption()
 		option.OptionValue = ""
 		option.OptionName = "site_beian"
@@ -143,7 +143,7 @@ func (m *Option) Init() error {
 		}
 	}
 
-	if DB.Table(m.TableName()).Where("option_name = ?", "language").First(&dummy).Error != nil {
+	if DB.Table(m.TableName()).Where("option_name = ?", "language").Count(&count); count == 0 {
 		option := NewOption()
 		option.OptionValue = "zh-cn"
 		option.OptionName = "language"
@@ -158,8 +158,8 @@ func (m *Option) Init() error {
 
 func (m *Option) Update() error {
 
-	var dummy Option
-	if DB.Table(m.TableName()).Where("option_name = ?", "language").First(&dummy).Error != nil {
+	var count int64
+	if DB.Table(m.TableName()).Where("option_name = ?", "language").Count(&count); count == 0 {
 		option := NewOption()
 		option.OptionValue = "zh-cn"
 		option.OptionName = "language"
