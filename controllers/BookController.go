@@ -558,7 +558,8 @@ func (c *BookController) Create() {
 		logger.Info("用户[", c.Member.Account, "]创建了项目 ->", book)
 		c.JsonResult(0, "ok", bookResult)
 	}
-	c.JsonResult(6001, "error")
+	// GET 请求重定向到书籍列表页（创建通过列表页弹窗发起）
+	c.Redirect(conf.URLFor("BookController.Index"), 302)
 }
 
 // 复制项目

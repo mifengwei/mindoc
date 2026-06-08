@@ -427,7 +427,7 @@ func (c *BaseController) StopRun() {
 	panic(AbortPanic{})
 }
 
-// Abort 中止请求
+// Abort 中止请求并显示错误页面
 func (c *BaseController) Abort(code string) {
 	statusMap := map[string]int{
 		"401": http.StatusUnauthorized,
@@ -435,11 +435,11 @@ func (c *BaseController) Abort(code string) {
 		"404": http.StatusNotFound,
 		"500": http.StatusInternalServerError,
 	}
-	if status, ok := statusMap[code]; ok {
-		c.Gin.AbortWithStatus(status)
-	} else {
-		c.Gin.AbortWithStatus(http.StatusInternalServerError)
+	status := http.StatusInternalServerError
+	if s, ok := statusMap[code]; ok {
+		status = s
 	}
+	c.ShowErrorPage(status, http.StatusText(status))
 }
 
 // CustomAbort 自定义中止请求

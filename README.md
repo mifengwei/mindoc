@@ -28,7 +28,7 @@ MinDoc 的前身是 [SmartWiki](https://github.com/lifei6671/SmartWiki) 文档�
   - [Todo List](https://github.com/mindoc-org/mindoc/projects/1#column-13554511)
   - [Work in progress](https://github.com/mindoc-org/mindoc/projects/1#column-13554512)
   - [Review in progress](https://github.com/mindoc-org/mindoc/projects/1#column-13554513)
-- Mindoc基于 [beeego](https://github.com/beego/beego) 开发，beego文档地址: https://github.com/beego/beego-doc/tree/main/docs/zh
+- Mindoc基于 [Gin](https://github.com/gin-gonic/gin) + [GORM](https://github.com/go-gorm/gorm) 开发，Gin文档地址: https://gin-gonic.com/en/docs/
 - :warning: **特别声明**:
   - 原作者 [lifei6671](https://github.com/lifei6671) 已于 2021-08-06 删除了个人捐赠信息，参见: [1a179179c1fe4d0d4db95e0b757d863aee5bf395](https://github.com/mindoc-org/mindoc/commit/1a179179c1fe4d0d4db95e0b757d863aee5bf395)
   - 截止目前(2023-03-27)，[mindoc-org](https://github.com/mindoc-org) 暂未发布任何捐赠信息，请勿轻信
@@ -58,8 +58,6 @@ go build -ldflags "-w" -o mindoc main.go
 ./mindoc install
 # 执行
 ./mindoc
-# 开发阶段运行
-bee run
 ```
 
 ## 旧版本运行 可更新部分数据库配置
@@ -269,7 +267,8 @@ mcp_api_key="${MINDOC_MCP_API_KEY||demo-mcp-api-key}"
 
 # 使用的技术(TODO: 最新技术栈整理中，使用的第三方库升级中)
 
-- [Beego](https://github.com/beego/beego) ~~1.10.0~~
+- [Gin](https://github.com/gin-gonic/gin) Web 框架
+- [GORM](https://github.com/go-gorm/gorm) ORM 框架
 - MySQL 5.6
 - [editor.md](https://github.com/pandao/editor.md) Markdown 编辑器
 - [cherry-markdown](https://github.com/Tencent/cherry-markdown) Cherry Markdown Writer

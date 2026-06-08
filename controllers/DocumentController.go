@@ -1194,13 +1194,18 @@ func (c *DocumentController) History() {
 
 	bookId := 0
 
+	// 未登录时跳转到登录页
+	if c.Member == nil {
+		promptUserToLogIn(c)
+		return
+	}
+
 	// 如果是超级管理员则忽略权限判断
-	if c.Member != nil && c.Member.IsAdministrator() {
+	if c.Member.IsAdministrator() {
 		book, err := models.NewBook().FindByFieldFirst("identify", identify)
 		if err != nil {
 			logger.Error("查找项目失败 ->", err)
-			c.Data["ErrorMessage"] = i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit")
-			return
+			c.ShowErrorPage(http.StatusNotFound, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 		}
 
 		bookId = book.BookId
@@ -1209,8 +1214,7 @@ func (c *DocumentController) History() {
 		bookResult, err := models.NewBookResult().FindByIdentify(identify, c.Member.MemberId)
 		if err != nil || bookResult.RoleId == conf.BookObserver {
 			logger.Error("查找项目失败 ->", err)
-			c.Data["ErrorMessage"] = i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit")
-			return
+			c.ShowErrorPage(http.StatusNotFound, i18n.Tr(c.Lang, "message.item_not_exist_or_no_permit"))
 		}
 
 		bookId = bookResult.BookId
@@ -1218,8 +1222,7 @@ func (c *DocumentController) History() {
 	}
 
 	if docId <= 0 {
-		c.Data["ErrorMessage"] = i18n.Tr(c.Lang, "message.param_error")
-		return
+		c.ShowErrorPage(http.StatusBadRequest, i18n.Tr(c.Lang, "message.param_error"))
 	}
 
 	doc, err := models.NewDocument().Find(docId)

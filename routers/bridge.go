@@ -42,6 +42,21 @@ func wrapAny(controllerInterface interface{}, methodName string) gin.HandlerFunc
 			return
 		}
 
+		// 将 ControllerName 和 ActionName 注入 Data，模板中使用 {{.ControllerName}} / {{.ActionName}}
+		controllerName := ctrlType.Elem().Name() // e.g. "BookController"
+		if base.IsValid() {
+			if dataField := base.FieldByName("Data"); dataField.IsValid() && !dataField.IsNil() {
+				dataField.SetMapIndex(reflect.ValueOf("ControllerName"), reflect.ValueOf(controllerName))
+				dataField.SetMapIndex(reflect.ValueOf("ActionName"), reflect.ValueOf(methodName))
+			}
+			if f := base.FieldByName("controllerName"); f.IsValid() && f.CanSet() {
+				f.SetString(controllerName)
+			}
+			if f := base.FieldByName("actionName"); f.IsValid() && f.CanSet() {
+				f.SetString(methodName)
+			}
+		}
+
 		if m := ctrlValue.MethodByName(methodName); m.IsValid() {
 			m.Call(nil)
 		} else {
